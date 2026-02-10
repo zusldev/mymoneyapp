@@ -28,24 +28,7 @@ ChartJS.register(
 );
 
 // Types
-interface Transaction {
-    id: string;
-    amount: number;
-    type: "income" | "expense";
-    date: string;
-    description: string;
-    category: string;
-    merchant?: string;
-}
-
-interface Subscription {
-    id: string;
-    name: string;
-    amount: number;
-    nextDate: string;
-    active: boolean;
-    color: string;
-}
+import type { CalendarTransaction as Transaction, CalendarSubscription as Subscription } from "../lib/types";
 
 // Helpers
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -99,12 +82,36 @@ export default function CalendarioPage() {
         // Transactions on this exact date
         const dayTxs = transactions.filter(t => t.date.split("T")[0] === dateStr);
 
-        // Subscription renewals on this day (approximate logic for recurring)
-        // Simplification: just check if nextDate matches loosely or day matches
+        // Subscription renewals — match by frequency
         const daySubs = subscriptions.filter(s => {
             if (!s.active) return false;
-            const subDay = new Date(s.nextDate).getDate();
-            return subDay === day; // Show on same day of month for simplicity
+            const nextD = new Date(s.nextDate);
+            const nextDay = nextD.getDate();
+            const nextMonth = nextD.getMonth();
+            const nextYear = nextD.getFullYear();
+
+            // Exact date match
+            if (nextDay === day && nextMonth === month && nextYear === year) return true;
+
+            // Monthly: same day-of-month, on or after the original nextDate
+            if (s.frequency === "monthly" && nextDay === day) {
+                const cellDate = new Date(year, month, day);
+                return cellDate >= nextD;
+            }
+
+            // Weekly: every 7 days from nextDate
+            if (s.frequency === "weekly") {
+                const cellDate = new Date(year, month, day);
+                const diff = Math.round((cellDate.getTime() - nextD.getTime()) / 86400000);
+                return diff >= 0 && diff % 7 === 0;
+            }
+
+            // Yearly: exact month and day
+            if (s.frequency === "yearly") {
+                return nextDay === day && nextMonth === month && year >= nextYear;
+            }
+
+            return false;
         });
 
         return { txs: dayTxs, subs: daySubs };
@@ -226,7 +233,7 @@ export default function CalendarioPage() {
                                                         : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 border-red-100 dark:border-red-900/30"
                                                         }`}>
                                                         <span className="truncate flex-1">{t.merchant || t.description}</span>
-                                                        <span className="font-semibold">{Math.abs(t.amount)}</span>
+                                                        <span className="font-semibold">{formatCurrency(Math.abs(t.amount))}</span>
                                                     </div>
                                                 ))}
                                                 {txs.length > 2 && <div className="text-[9px] text-slate-400 pl-1">+{txs.length - 2} más</div>}
@@ -265,7 +272,7 @@ export default function CalendarioPage() {
                         {/* ChartJS Chart */}
                         <div className="relative w-full h-64 bg-white dark:bg-[#1a262d] rounded-lg border border-slate-100 dark:border-slate-700 p-4">
                             {(() => {
-                                // Prepare data
+                                // Prepare data — start from current total balance delta
                                 let running = 0;
                                 const dailyBalances = Array.from({ length: daysInMonth }, (_, i) => {
                                     const day = i + 1;
@@ -394,18 +401,45 @@ export default function CalendarioPage() {
                     {/* AI Insights */}
                     <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
                         <div className="flex items-center gap-2 mb-4">
-                            <span className="material-icons-round text-[#2badee] animate-pulse">auto_awesome</span>
+                            <span className="material-icons-round text-[#2badee]">auto_awesome</span>
                             <h3 className="font-bold text-slate-900 dark:text-white">AI Insights</h3>
                         </div>
                         <div className="space-y-3">
-                            <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30 text-sm">
-                                <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
-                                    <span className="font-semibold text-[#2badee]">Alerta:</span> Gastos recurrentes altos detectados para el <span className="font-medium">25 de Oct</span>.
-                                </p>
-                            </div>
-                            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400">
-                                Tienes suscripciones activas por $25/mes sin uso reciente.
-                            </div>
+                            {(() => {
+                                const activeSubs = subscriptions.filter(s => s.active);
+                                const monthSubs = activeSubs.filter(s => {
+                                    const d = new Date(s.nextDate).getDate();
+                                    return d >= 20 && d <= 28;
+                                });
+                                const unusedSubs = activeSubs.filter(s => s.amount < 100);
+                                const tips: { text: string; type: "alert" | "info" }[] = [];
+
+                                if (monthSubs.length > 0) {
+                                    tips.push({ text: `${monthSubs.length} cobro${monthSubs.length > 1 ? "s" : ""} recurrente${monthSubs.length > 1 ? "s" : ""} entre el 20 y 28 de este mes (${monthSubs.map(s => s.name).join(", ")}).`, type: "alert" });
+                                }
+                                if (expenses > income && income > 0) {
+                                    tips.push({ text: `Gastos superan ingresos por ${formatCurrency(expenses - income)} este mes.`, type: "alert" });
+                                }
+                                if (unusedSubs.length > 0) {
+                                    tips.push({ text: `Tienes ${unusedSubs.length} suscripci\u00f3n${unusedSubs.length > 1 ? "es" : ""} de bajo monto. Revisa si a\u00fan las necesitas.`, type: "info" });
+                                }
+                                if (tips.length === 0) {
+                                    tips.push({ text: "Tu calendario financiero se ve bien para este mes.", type: "info" });
+                                }
+
+                                return tips.map((tip, i) => (
+                                    <div key={i} className={`p-3 rounded-lg border text-sm ${
+                                        tip.type === "alert"
+                                            ? "bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30"
+                                            : "bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700"
+                                    }`}>
+                                        <p className={tip.type === "alert" ? "text-slate-700 dark:text-slate-300 leading-relaxed" : "text-slate-600 dark:text-slate-400"}>
+                                            {tip.type === "alert" && <span className="font-semibold text-[#2badee]">Alerta: </span>}
+                                            {tip.text}
+                                        </p>
+                                    </div>
+                                ));
+                            })()}
                         </div>
                     </div>
 
