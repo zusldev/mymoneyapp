@@ -64,7 +64,7 @@ export default function MetasPage() {
                     const daysLeft = now ? Math.max(0, Math.ceil((new Date(g.deadline).getTime() - now) / 86400000)) : 0;
 
                     return (
-                        <div key={g.id} className="bg-white dark:bg-[#1a262d] rounded-xl p-5 shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
+                        <div key={g.id} className="liquid-card liquid-card-hover rounded-xl p-5 group">
                             {/* Header */}
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-3">
@@ -130,7 +130,7 @@ export default function MetasPage() {
             </div>
 
             {goals.length === 0 && (
-                <div className="text-center py-16 bg-white dark:bg-[#1a262d] rounded-2xl border border-slate-100 dark:border-slate-800">
+                <div className="text-center py-16 liquid-card rounded-2xl">
                     <span className="material-icons-round text-5xl text-slate-300 mb-4">savings</span>
                     <p className="text-slate-500">No hay metas registradas</p>
                     <button onClick={openCreate} className="btn-primary mt-4">Agregar</button>

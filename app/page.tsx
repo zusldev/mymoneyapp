@@ -134,7 +134,7 @@ export default function Dashboard() {
       {/* ═══ Top Row: Hero Card & Key Metrics ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Glassmorphic Hero Card: Health Score */}
-        <div className="lg:col-span-8 glass-panel rounded-2xl p-8 relative overflow-hidden shadow-soft flex flex-col md:flex-row items-center justify-between gap-8 group">
+        <div className="lg:col-span-8 liquid-glass-cyan liquid-shimmer-edge rounded-2xl p-6 md:p-8 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 group liquid-settle">
           {/* Decorative blob */}
           <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#2badee]/10 rounded-full blur-3xl group-hover:bg-[#2badee]/20 transition-all duration-500" />
 
@@ -182,7 +182,7 @@ export default function Dashboard() {
         {/* Right Column: Balance & Savings */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           {/* Balance Card */}
-          <div className="bg-white dark:bg-[#1a262d] p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex-1 flex flex-col justify-center">
+          <div className="liquid-card liquid-card-hover rounded-xl p-5 md:p-6 flex-1 flex flex-col justify-center">
             <div className="flex justify-between items-start mb-2">
               <div className="p-2 bg-[#e0f2fe] dark:bg-[#2badee]/20 rounded-lg text-[#2badee]">
                 <span className="material-icons-round text-xl">account_balance</span>
@@ -201,7 +201,7 @@ export default function Dashboard() {
           </div>
 
           {/* Est Savings Card */}
-          <div className="bg-white dark:bg-[#1a262d] p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex-1 flex flex-col justify-center relative overflow-hidden">
+          <div className="liquid-card liquid-card-hover rounded-xl p-5 md:p-6 flex-1 flex flex-col justify-center relative overflow-hidden">
             <div className="absolute right-0 bottom-0 opacity-10 text-[#2badee] pointer-events-none transform translate-x-2 translate-y-2">
               <span className="material-icons-round text-8xl">trending_up</span>
             </div>
@@ -222,7 +222,7 @@ export default function Dashboard() {
       {/* ═══ Middle Row: Budget & Spending Mix ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Monthly Budget (2 cols) */}
-        <div className="lg:col-span-2 bg-white dark:bg-[#1a262d] rounded-xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+        <div className="lg:col-span-2 liquid-card rounded-xl p-5 md:p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">Presupuesto Mensual</h3>
@@ -250,7 +250,7 @@ export default function Dashboard() {
           {/* Categories breakdown */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {topCats.map((cat) => (
-              <div key={cat.category} className="p-4 rounded-lg bg-[#f6f7f8] dark:bg-[#101c22] border border-slate-100 dark:border-slate-800">
+              <div key={cat.category} className="p-4 rounded-lg liquid-card">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
                   <span className="text-xs font-semibold text-slate-500 uppercase">{cat.label}</span>
@@ -270,7 +270,7 @@ export default function Dashboard() {
         </div>
 
         {/* Donut Chart — Spending Mix */}
-        <div className="lg:col-span-1 bg-white dark:bg-[#1a262d] rounded-xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
+        <div className="lg:col-span-1 liquid-card rounded-xl p-5 md:p-6 flex flex-col">
           <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Mix de Gastos</h3>
           <div className="flex-1 flex items-center justify-center relative">
             {/* CSS Donut Chart */}
@@ -335,7 +335,7 @@ export default function Dashboard() {
               return (
                 <div
                   key={sub.id}
-                  className="snap-start min-w-[280px] bg-white dark:bg-[#1a262d] p-5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-[#2badee]/30 transition-colors group cursor-pointer"
+                  className="snap-start min-w-[260px] md:min-w-[280px] liquid-card liquid-card-hover rounded-xl p-4 md:p-5 group cursor-pointer"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div
