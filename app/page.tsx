@@ -3,80 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatCurrency } from "./lib/financialEngine";
 import { CATEGORIES } from "./lib/categories";
-
-interface AnalysisData {
-  overview: {
-    totalBalance: number;
-    totalDebt: number;
-    netWorth: number;
-    accountCount: number;
-    cardCount: number;
-  };
-  cashFlow: {
-    totalIncome: number;
-    totalExpenses: number;
-    netBalance: number;
-    savingsRate: number;
-    isDeficit: boolean;
-  };
-  categoryBreakdown: {
-    category: string;
-    label: string;
-    color: string;
-    total: number;
-    percentage: number;
-    count: number;
-  }[];
-  creditCards: {
-    id: string;
-    name: string;
-    utilization: number;
-    riskLevel: string;
-    minimumPayment: number;
-    noInterestPayment: number;
-    availableCredit: number;
-    impactDescription: string;
-  }[];
-  projection: {
-    projectedBalance: number;
-    liquidityDays: number;
-    overdraftRisk: boolean;
-    dailyBurnRate: number;
-    daysRemaining: number;
-  };
-  anomalies: {
-    type: string;
-    severity: string;
-    description: string;
-    amount?: number;
-  }[];
-  recommendations: {
-    priority: number;
-    category: string;
-    title: string;
-    description: string;
-    impact: string;
-  }[];
-  subscriptions: { count: number; monthlyTotal: number };
-  income: { expectedMonthly: number };
-  goals: {
-    id: string;
-    name: string;
-    targetAmount: number;
-    currentAmount: number;
-    progress: number;
-    color: string;
-    deadline: string;
-  }[];
-  recentTransactions: {
-    id: string;
-    amount: number;
-    type: string;
-    merchant: string;
-    category: string;
-    date: string;
-  }[];
-}
+import type { AnalysisData } from "./lib/types";
 
 // Subscription type for upcoming payments
 interface UpcomingSub {
@@ -196,6 +123,14 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 stagger-children">
+      {/* ═══ Blue ambient — Dashboard identity ═══ */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+        <div className="absolute -top-20 right-10 w-[420px] h-[420px] rounded-full opacity-[0.05]"
+          style={{ background: 'radial-gradient(circle, #2badee, transparent 70%)' }} />
+        <div className="absolute top-1/2 -left-32 w-[350px] h-[350px] rounded-full opacity-[0.035]"
+          style={{ background: 'radial-gradient(circle, #2badee, transparent 70%)' }} />
+      </div>
+
       {/* ═══ Top Row: Hero Card & Key Metrics ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Glassmorphic Hero Card: Health Score */}

@@ -1,27 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import { CATEGORIES, CATEGORY_KEYS } from "../lib/categories";
-
-/* ═══ Types ═══ */
-interface Account { id: string; name: string; icon: string; color: string; }
-interface CreditCard { id: string; name: string; bank: string; lastFour: string; color: string; }
-interface Sub {
-    id: string; name: string; amount: number; frequency: string; category: string;
-    type: string; nextDate: string; active: boolean; color: string; icon: string;
-    accountId: string | null; creditCardId: string | null;
-    account?: Account | null; creditCard?: CreditCard | null;
-    createdAt: string;
-}
+import type { Account, CreditCard, Subscription as Sub } from "../lib/types";
 
 type Filter = "all" | "active" | "paused";
 
 const FREQ: Record<string, string> = { monthly: "Mensual", yearly: "Anual", weekly: "Semanal" };
-const TYPE_LABELS: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-    critical: { label: "Esencial", color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800", icon: "shield" },
-    productive: { label: "Productivo", color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800", icon: "work" },
-    entertainment: { label: "Entretenimiento", color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800", icon: "sports_esports" },
+const TYPE_META: Record<string, { label: string; icon: string; ring: string; badge: string }> = {
+    critical: { label: "Esencial", icon: "shield", ring: "ring-slate-400/30", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+    productive: { label: "Productivo", icon: "work", ring: "ring-violet-400/30", badge: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300" },
+    entertainment: { label: "Ocio", icon: "sports_esports", ring: "ring-fuchsia-400/30", badge: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-300" },
 };
 
 const SUB_ICONS = [
@@ -30,7 +20,7 @@ const SUB_ICONS = [
     "podcasts", "design_services", "code",
 ];
 
-/* ═══ Helpers ═══ */
+/* === Helpers === */
 function toMonthly(amount: number, freq: string) {
     if (freq === "yearly") return amount / 12;
     if (freq === "weekly") return amount * 4.33;
@@ -49,50 +39,59 @@ function daysUntil(dateStr: string) {
     return Math.ceil((d.getTime() - now.getTime()) / 86400000);
 }
 
+function daysLabel(days: number): string {
+    if (days < 0) return "Vencido";
+    if (days === 0) return "Hoy";
+    if (days === 1) return "Ma\u00f1ana";
+    if (days <= 7) return `${days} d\u00edas`;
+    return `${days} d\u00edas`;
+}
+
 function monthsSince(dateStr: string) {
     const d = new Date(dateStr);
     const now = new Date();
     return Math.max(0, (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth()));
 }
 
-
-
-/* ═══ Component ═══ */
+/* === Component === */
 export default function SuscripcionesPage() {
     const [subs, setSubs] = useState<Sub[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
+    const [cards, setCards] = useState<CreditCard[]>([]);
     const [incomes, setIncomes] = useState<{ amount: number; frequency: string; active: boolean }[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<Filter>("all");
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Sub | null>(null);
     const [simulateCancelled, setSimulateCancelled] = useState<Set<string>>(new Set());
+    const [expandedId, setExpandedId] = useState<string | null>(null);
     const [form, setForm] = useState({
         name: "", amount: "", frequency: "monthly", category: "suscripciones",
-        type: "entertainment", nextDate: "", color: "#f59e0b", icon: "sync",
+        type: "entertainment", nextDate: "", color: "#8b5cf6", icon: "sync",
         accountId: "", creditCardId: "",
     });
-    const [expandedId, setExpandedId] = useState<string | null>(null);
 
-    /* ── Fetch ── */
+    /* -- Fetch -- */
     const fetchData = async () => {
         try {
             const [subRes, accRes, ccRes, incRes] = await Promise.all([
                 fetch("/api/subscriptions"), fetch("/api/accounts"),
                 fetch("/api/credit-cards"), fetch("/api/incomes"),
             ]);
-            const [sub, acc, , inc] = await Promise.all([subRes.json(), accRes.json(), ccRes.json(), incRes.json()]);
+            const [sub, acc, cc, inc] = await Promise.all([subRes.json(), accRes.json(), ccRes.json(), incRes.json()]);
             setSubs(Array.isArray(sub) ? sub : []);
             setAccounts(Array.isArray(acc) ? acc : []);
+            setCards(Array.isArray(cc) ? cc : []);
             setIncomes(Array.isArray(inc) ? inc : []);
         } catch { /* */ } finally { setLoading(false); }
     };
     useEffect(() => { fetchData(); }, []);
 
-    /* ── Computed ── */
+    /* -- Computed -- */
     const activeSubs = subs.filter(s => s.active);
     const pausedSubs = subs.filter(s => !s.active);
     const monthlyTotal = activeSubs.reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
+    const yearlyTotal = activeSubs.reduce((s, i) => s + toYearly(i.amount, i.frequency), 0);
     const monthlyIncome = incomes.filter(i => i.active).reduce((s, i) => {
         const m = i.frequency === "weekly" ? i.amount * 4.33 : i.frequency === "biweekly" ? i.amount * 2 : i.amount;
         return s + m;
@@ -101,11 +100,25 @@ export default function SuscripcionesPage() {
 
     const criticalTotal = activeSubs.filter(s => s.type === "critical").reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
     const productiveTotal = activeSubs.filter(s => s.type === "productive").reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
-    const entertainmentTotal = monthlyTotal - criticalTotal - productiveTotal;
+    const entertainmentTotal = Math.max(0, monthlyTotal - criticalTotal - productiveTotal);
+
+    // Safe percentages (avoid NaN on division by zero)
+    const safePct = (val: number) => monthlyTotal > 0 ? Math.round((val / monthlyTotal) * 100) : 0;
+    const criticalPct = safePct(criticalTotal);
+    const productivePct = safePct(productiveTotal);
+    const entertainmentPct = safePct(entertainmentTotal);
 
     const filtered = filter === "active" ? activeSubs : filter === "paused" ? pausedSubs : subs;
 
-    /* ── Simulator ── */
+    // Upcoming payments - next 5 sorted by date
+    const upcoming = useMemo(() =>
+        [...activeSubs]
+            .sort((a, b) => new Date(a.nextDate).getTime() - new Date(b.nextDate).getTime())
+            .slice(0, 5),
+        [activeSubs]
+    );
+
+    /* -- Simulator -- */
     const simSavingsMonthly = Array.from(simulateCancelled).reduce((s, id) => {
         const sub = activeSubs.find(x => x.id === id);
         return sub ? s + toMonthly(sub.amount, sub.frequency) : s;
@@ -116,55 +129,42 @@ export default function SuscripcionesPage() {
         setSimulateCancelled(n);
     };
 
-    /* ── AI Insights ── */
-    const insights: { icon: string; title: string; desc: string; type: "info" | "warn" | "success" | "danger" }[] = [];
+    /* -- AI Insights -- */
+    const insights = useMemo(() => {
+        const list: { icon: string; title: string; desc: string; type: "info" | "warn" | "success" | "danger" }[] = [];
 
-    // Income % warning
-    if (incomePct > 15) {
-        insights.push({ icon: "warning", title: "Alto porcentaje de ingreso", desc: `Tus suscripciones consumen ${incomePct}% de tus ingresos. Se recomienda mantener debajo del 15%.`, type: "warn" });
-    } else if (incomePct > 0 && incomePct <= 15) {
-        insights.push({ icon: "check_circle", title: "Suscripciones bajo control", desc: `Solo ${incomePct}% de tus ingresos va a suscripciones. ¡Bien gestionado!`, type: "success" });
-    }
-
-    // Entertainment dominance
-    if (monthlyTotal > 0 && entertainmentTotal / monthlyTotal > 0.6 && activeSubs.length > 2) {
-        insights.push({ icon: "sports_esports", title: "Entretenimiento dominante", desc: `${Math.round((entertainmentTotal / monthlyTotal) * 100)}% de tus suscripciones son entretenimiento. Revisa si todas aportan valor.`, type: "info" });
-    }
-
-    // Overlapping streaming
-    const streamingSubs = activeSubs.filter(s => ["entretenimiento", "suscripciones"].includes(s.category) && s.type === "entertainment");
-    if (streamingSubs.length >= 3) {
-        insights.push({ icon: "content_copy", title: "Posible redundancia", desc: `Tienes ${streamingSubs.length} servicios de entretenimiento. ¿Usas todos activamente?`, type: "warn" });
-    }
-
-    // Old subscriptions
-    const oldSubs = activeSubs.filter(s => monthsSince(s.createdAt) > 6);
-    if (oldSubs.length > 0) {
-        const oldest = oldSubs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
-        insights.push({ icon: "history", title: "Suscripción longeva", desc: `"${oldest.name}" lleva ${monthsSince(oldest.createdAt)} meses activa. Revisa si aún la necesitas.`, type: "info" });
-    }
-
-    // Savings opportunity
-    if (entertainmentTotal > 0 && activeSubs.filter(s => s.type === "entertainment").length >= 2) {
-        insights.push({ icon: "savings", title: "Oportunidad de ahorro", desc: `Cancelar las suscripciones de entretenimiento menos usadas te ahorraría ~${formatCurrency(entertainmentTotal * 0.4)}/mes.`, type: "success" });
-    }
-
-    /* ── Card concentration ── */
-    const cardUsage: Record<string, { name: string; count: number; total: number }> = {};
-    for (const s of activeSubs) {
-        const key = s.creditCardId || s.accountId || "none";
-        const label = s.creditCard ? `${s.creditCard.name} ····${s.creditCard.lastFour}` : s.account ? s.account.name : null;
-        if (label) {
-            if (!cardUsage[key]) cardUsage[key] = { name: label, count: 0, total: 0 };
-            cardUsage[key].count++;
-            cardUsage[key].total += toMonthly(s.amount, s.frequency);
+        if (incomePct > 15) {
+            list.push({ icon: "warning", title: "Alto porcentaje de ingreso", desc: `Tus suscripciones consumen ${incomePct}% de tus ingresos. Se recomienda mantener debajo del 15%.`, type: "warn" });
+        } else if (incomePct > 0 && incomePct <= 15) {
+            list.push({ icon: "check_circle", title: "Suscripciones bajo control", desc: `Solo ${incomePct}% de tus ingresos va a suscripciones. \u00a1Bien gestionado!`, type: "success" });
         }
-    }
 
-    /* ── CRUD ── */
+        if (monthlyTotal > 0 && entertainmentTotal / monthlyTotal > 0.6 && activeSubs.length > 2) {
+            list.push({ icon: "sports_esports", title: "Entretenimiento dominante", desc: `${Math.round((entertainmentTotal / monthlyTotal) * 100)}% de tus suscripciones son ocio. Revisa si todas aportan valor.`, type: "info" });
+        }
+
+        const streamingSubs = activeSubs.filter(s => ["entretenimiento", "suscripciones"].includes(s.category) && s.type === "entertainment");
+        if (streamingSubs.length >= 3) {
+            list.push({ icon: "content_copy", title: "Posible redundancia", desc: `Tienes ${streamingSubs.length} servicios de entretenimiento. \u00bfUsas todos activamente?`, type: "warn" });
+        }
+
+        const oldSubs = activeSubs.filter(s => monthsSince(s.createdAt) > 6);
+        if (oldSubs.length > 0) {
+            const oldest = oldSubs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
+            list.push({ icon: "history", title: "Suscripci\u00f3n longeva", desc: `"${oldest.name}" lleva ${monthsSince(oldest.createdAt)} meses activa. Revisa si a\u00fan la necesitas.`, type: "info" });
+        }
+
+        if (entertainmentTotal > 0 && activeSubs.filter(s => s.type === "entertainment").length >= 2) {
+            list.push({ icon: "savings", title: "Oportunidad de ahorro", desc: `Cancelar las suscripciones de ocio menos usadas te ahorrar\u00eda ~${formatCurrency(entertainmentTotal * 0.4)}/mes.`, type: "success" });
+        }
+
+        return list;
+    }, [incomePct, monthlyTotal, entertainmentTotal, activeSubs]);
+
+    /* -- CRUD -- */
     const openCreate = () => {
         setEditing(null);
-        setForm({ name: "", amount: "", frequency: "monthly", category: "suscripciones", type: "entertainment", nextDate: new Date().toISOString().split("T")[0], color: "#f59e0b", icon: "sync", accountId: "", creditCardId: "" });
+        setForm({ name: "", amount: "", frequency: "monthly", category: "suscripciones", type: "entertainment", nextDate: new Date().toISOString().split("T")[0], color: "#8b5cf6", icon: "sync", accountId: "", creditCardId: "" });
         setModalOpen(true);
     };
     const openEdit = (s: Sub) => {
@@ -178,13 +178,13 @@ export default function SuscripcionesPage() {
         await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
         setModalOpen(false); fetchData();
     };
-    /* const toggle = async (s: Sub) => {
+    const toggleActive = async (s: Sub) => {
         await fetch(`/api/subscriptions/${s.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !s.active }) });
         fetchData();
-    }; */
-    const del = async (id: string) => { if (!confirm("¿Eliminar esta suscripción?")) return; await fetch(`/api/subscriptions/${id}`, { method: "DELETE" }); fetchData(); };
+    };
+    const del = async (id: string) => { if (!confirm("\u00bfEliminar esta suscripci\u00f3n?")) return; await fetch(`/api/subscriptions/${id}`, { method: "DELETE" }); fetchData(); };
 
-    /* ── Loading ── */
+    /* -- Loading -- */
     if (loading) return (
         <div className="flex items-center justify-center min-h-[60vh]">
             <div className="h-10 w-10 border-4 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
@@ -192,223 +192,458 @@ export default function SuscripcionesPage() {
     );
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8 pb-24">
-
-            {/* ═══════════ HEADER ═══════════ */}
-            <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Suscripciones</h1>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Optimiza tus gastos recurrentes</p>
-                </div>
-                <button onClick={openCreate} className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-violet-600/20 active:scale-[0.97]">
-                    <span className="material-icons-round text-lg">add</span>
-                    Nueva Suscripción
-                </button>
-            </header>
-
-            {/* ═══════════ SECTION 1: SPENDING DNA (Stacked Bar) ═══════════ */}
-            <div className="bg-white dark:bg-[#1a262d] rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
-                <div className="flex justify-between items-end mb-4">
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">ADN de Suscripciones</h2>
-                    <div className="text-right">
-                        <span className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(monthlyTotal)}</span>
-                        <span className="text-xs text-slate-400 block">mensual total</span>
-                    </div>
-                </div>
-
-                {/* Stacked Bar */}
-                <div className="h-4 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex mb-4">
-                    {/* Critical */}
-                    <div className="h-full bg-slate-800 dark:bg-slate-400 transition-all duration-1000" style={{ width: `${(criticalTotal / monthlyTotal) * 100}%` }} />
-                    {/* Productive */}
-                    <div className="h-full bg-violet-500 transition-all duration-1000" style={{ width: `${(productiveTotal / monthlyTotal) * 100}%` }} />
-                    {/* Entertainment */}
-                    <div className="h-full bg-fuchsia-400 transition-all duration-1000" style={{ width: `${(entertainmentTotal / monthlyTotal) * 100}%` }} />
-                </div>
-
-                {/* Legend / Metrics */}
-                <div className="grid grid-cols-3 gap-2">
-                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-1.5 mb-1">
-                            <div className="w-2 h-2 rounded-full bg-slate-800 dark:bg-slate-400" />
-                            <span className="text-xs font-semibold text-slate-500">Esencial</span>
-                        </div>
-                        <span className="text-sm font-bold text-slate-800 dark:text-white">{formatCurrency(criticalTotal)}</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/30">
-                        <div className="flex items-center gap-1.5 mb-1">
-                            <div className="w-2 h-2 rounded-full bg-violet-500" />
-                            <span className="text-xs font-semibold text-violet-600 dark:text-violet-400">Productivo</span>
-                        </div>
-                        <span className="text-sm font-bold text-violet-700 dark:text-violet-300">{formatCurrency(productiveTotal)}</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-fuchsia-50 dark:bg-fuchsia-900/10 border border-fuchsia-100 dark:border-fuchsia-800/30">
-                        <div className="flex items-center gap-1.5 mb-1">
-                            <div className="w-2 h-2 rounded-full bg-fuchsia-400" />
-                            <span className="text-xs font-semibold text-fuchsia-600 dark:text-fuchsia-400">Ocio</span>
-                        </div>
-                        <span className="text-sm font-bold text-fuchsia-700 dark:text-fuchsia-300">{formatCurrency(entertainmentTotal)}</span>
-                    </div>
-                </div>
+        <div className="max-w-5xl mx-auto space-y-8 pb-28 relative">
+            {/* Purple ambient */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+                <div className="absolute -top-20 right-10 w-[420px] h-[420px] rounded-full opacity-[0.06]"
+                    style={{ background: 'radial-gradient(circle, #8b5cf6, transparent 70%)' }} />
+                <div className="absolute top-1/2 -left-32 w-[350px] h-[350px] rounded-full opacity-[0.04]"
+                    style={{ background: 'radial-gradient(circle, #a855f7, transparent 70%)' }} />
+                <div className="absolute -bottom-20 right-1/3 w-[280px] h-[280px] rounded-full opacity-[0.03]"
+                    style={{ background: 'radial-gradient(circle, #7c3aed, transparent 70%)' }} />
             </div>
 
-            {/* ═══════════ MAIN LIST (Modular Cards) ═══════════ */}
-            <div className="space-y-4">
-                {/* Filters */}
-                <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
-                    {([
-                        { key: "all" as Filter, label: "Todas" },
-                        { key: "active" as Filter, label: `Activas` },
-                        { key: "paused" as Filter, label: `Pausadas` },
-                    ]).map(f => (
-                        <button key={f.key} onClick={() => setFilter(f.key)}
-                            className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all whitespace-nowrap ${filter === f.key
-                                ? "bg-violet-600 text-white border-violet-600"
-                                : "bg-white dark:bg-[#1a262d] text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-violet-300"}`}>
-                            {f.label}
-                        </button>
-                    ))}
+            {/* HERO - Liquid Glass Command Center */}
+            <header className="liquid-glass-violet liquid-shimmer-edge rounded-3xl p-6 md:p-8 liquid-settle">
+                {/* Top row */}
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <span className="material-icons-round text-violet-500 text-base">auto_awesome</span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-violet-600/70 dark:text-violet-400/70">
+                            Centro de Suscripciones
+                        </span>
+                    </div>
+                    <button onClick={openCreate}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-[0.97] bg-violet-500/15 text-violet-700 dark:text-violet-300 hover:bg-violet-500/25">
+                        <span className="material-icons-round text-base">add_circle_outline</span>
+                        Nueva
+                    </button>
                 </div>
 
-                {filtered.length === 0 && (
-                    <div className="text-center py-20 bg-white dark:bg-[#1a262d] rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                        <span className="material-icons-round text-4xl text-slate-200 dark:text-slate-700 mb-3 block">search_off</span>
-                        <p className="text-slate-400">No se encontraron suscripciones</p>
+                {/* Main stats */}
+                <div className="flex flex-col md:flex-row md:items-end gap-6 md:gap-10">
+                    <div className="flex-1 liquid-float" style={{ animationDelay: "200ms" }}>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500/60 dark:text-violet-400/60 mb-1">
+                            Costo Mensual
+                        </p>
+                        <p className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight">
+                            {formatCurrency(monthlyTotal)}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                            {activeSubs.length} activa{activeSubs.length !== 1 ? "s" : ""} &middot; {pausedSubs.length} pausada{pausedSubs.length !== 1 ? "s" : ""}
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 md:w-[380px]">
+                        <div className="liquid-glass rounded-xl px-3 py-2.5">
+                            <p className="text-[10px] font-semibold text-violet-600/60 dark:text-violet-400/60 uppercase tracking-wide">Anual</p>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">
+                                {formatCurrency(yearlyTotal)}
+                            </p>
+                        </div>
+                        <div className="liquid-glass rounded-xl px-3 py-2.5">
+                            <p className="text-[10px] font-semibold text-violet-600/60 dark:text-violet-400/60 uppercase tracking-wide">Ingreso %</p>
+                            <p className={`text-sm font-bold mt-0.5 tabular-nums ${incomePct > 15 ? "text-amber-600" : "text-violet-600 dark:text-violet-300"}`}>
+                                {incomePct}%
+                            </p>
+                        </div>
+                        <div className="liquid-glass rounded-xl px-3 py-2.5">
+                            <p className="text-[10px] font-semibold text-violet-600/60 dark:text-violet-400/60 uppercase tracking-wide">Diario</p>
+                            <p className="text-sm font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">
+                                {formatCurrency(monthlyTotal / 30)}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* DNA bar */}
+                {monthlyTotal > 0 && (
+                    <div className="mt-6">
+                        <div className="flex h-2.5 rounded-full overflow-hidden gap-px">
+                            <div className="rounded-full transition-all duration-1000 bg-slate-600 dark:bg-slate-400"
+                                style={{ width: `${Math.max(criticalPct, 3)}%` }} title={`Esencial ${criticalPct}%`} />
+                            <div className="rounded-full transition-all duration-1000 bg-violet-500"
+                                style={{ width: `${Math.max(productivePct, 3)}%` }} title={`Productivo ${productivePct}%`} />
+                            <div className="rounded-full transition-all duration-1000 bg-fuchsia-400"
+                                style={{ width: `${Math.max(entertainmentPct, 3)}%` }} title={`Ocio ${entertainmentPct}%`} />
+                        </div>
+                        <div className="flex gap-5 mt-2.5">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-slate-600 dark:bg-slate-400" />
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">Esencial {criticalPct}%</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-violet-500" />
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">Productivo {productivePct}%</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-fuchsia-400" />
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">Ocio {entertainmentPct}%</span>
+                            </div>
+                        </div>
                     </div>
                 )}
+            </header>
 
-                <div className="space-y-3">
-                    {filtered.map(sub => {
-                        const isExpanded = expandedId === sub.id;
-                        const dLeft = daysUntil(sub.nextDate);
-                        const isSoon = dLeft >= 0 && dLeft <= 3;
-                        const isSimulated = simulateCancelled.has(sub.id);
+            {/* UPCOMING PAYMENTS - Horizontal Strip */}
+            {upcoming.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2.5 mb-4">
+                        <div className="w-[3px] h-5 rounded-full bg-gradient-to-b from-violet-400/80 to-violet-600/40" />
+                        <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Pr&oacute;ximos Cobros</h2>
+                    </div>
 
-                        return (
-                            <div key={sub.id}
-                                className={`bg-white dark:bg-[#1a262d] rounded-2xl shadow-sm border transition-all overflow-hidden ${isExpanded
-                                    ? "ring-2 ring-violet-500/20 border-violet-500/50"
-                                    : "border-slate-100 dark:border-slate-800 hover:border-violet-200 dark:hover:border-violet-800"
-                                    } ${isSimulated ? "opacity-60 grayscale-[0.8]" : ""}`}>
+                    <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-3 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x">
+                        {upcoming.map((sub, idx) => {
+                            const d = daysUntil(sub.nextDate);
+                            const isNext = idx === 0;
+                            const isUrgent = d >= 0 && d <= 2;
 
-                                {/* Header Row (Always Visible) */}
-                                <div className="p-4 flex items-center gap-4 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : sub.id)}>
-                                    {/* Icon */}
-                                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm text-xl text-white transition-transform duration-300"
-                                        style={{ backgroundColor: sub.color || '#8b5cf6', transform: isExpanded ? 'scale(1.1)' : 'scale(1)' }}>
-                                        <span className="material-icons-round">{sub.icon || "sync"}</span>
+                            return (
+                                <div key={sub.id}
+                                    className={`snap-start shrink-0 w-44 rounded-2xl p-4 transition-all relative overflow-hidden group cursor-pointer liquid-settle ${isNext
+                                        ? "sub-glass-card !border-violet-300/40 dark:!border-violet-600/30"
+                                        : "sub-glass-card"
+                                        }`}
+                                    style={{ animationDelay: `${idx * 80}ms` }}
+                                    onClick={() => setExpandedId(expandedId === sub.id ? null : sub.id)}>
+
+                                    {isUrgent && (
+                                        <div className="absolute top-0 right-0 w-12 h-12 bg-violet-500/10 rounded-full -mr-4 -mt-4 blur-xl" />
+                                    )}
+
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm shadow-sm"
+                                            style={{ backgroundColor: sub.color || '#8b5cf6' }}>
+                                            <span className="material-icons-round text-base">{sub.icon || "sync"}</span>
+                                        </div>
+                                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${isUrgent
+                                            ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                                            : "text-slate-400"
+                                            }`}>
+                                            {daysLabel(d)}
+                                        </span>
                                     </div>
 
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between">
-                                            <h3 className="font-bold text-slate-900 dark:text-white truncate text-base">{sub.name}</h3>
-                                            <p className="font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(sub.amount)}</p>
+                                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{sub.name}</p>
+                                    <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums mt-1">
+                                        {formatCurrency(sub.amount)}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        {new Date(sub.nextDate).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}
+                                    </p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
+            {/* MAIN LIST - Glass Cards */}
+            <section>
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-[3px] h-5 rounded-full bg-gradient-to-b from-violet-400/80 to-violet-600/40" />
+                        <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Suscripciones</h2>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                        {([
+                            { key: "all" as Filter, label: "Todas", count: subs.length },
+                            { key: "active" as Filter, label: "Activas", count: activeSubs.length },
+                            { key: "paused" as Filter, label: "Pausadas", count: pausedSubs.length },
+                        ]).map(f => (
+                            <button key={f.key} onClick={() => setFilter(f.key)}
+                                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${filter === f.key
+                                    ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-white/5"
+                                    }`}>
+                                {f.label}
+                                {f.count > 0 && <span className="ml-1 opacity-60">{f.count}</span>}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {filtered.length === 0 ? (
+                    <div className="liquid-glass rounded-2xl text-center py-16 liquid-settle">
+                        <span className="material-icons-round text-5xl mb-3 block text-violet-300/40">subscriptions</span>
+                        <p className="text-sm text-slate-500 mb-4">
+                            {filter === "paused" ? "No tienes suscripciones pausadas" : "No hay suscripciones registradas"}
+                        </p>
+                        <button onClick={openCreate} className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 transition-all shadow-lg shadow-violet-500/20">
+                            Agregar Primera
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {filtered.map((sub, idx) => {
+                            const isExpanded = expandedId === sub.id;
+                            const d = daysUntil(sub.nextDate);
+                            const isOverdue = d < 0;
+                            const isSoon = d >= 0 && d <= 3;
+                            const isSimulated = simulateCancelled.has(sub.id);
+                            const meta = TYPE_META[sub.type] || TYPE_META.entertainment;
+
+                            return (
+                                <div key={sub.id}
+                                    className={`sub-glass-card rounded-2xl overflow-hidden liquid-settle ${isExpanded ? "ring-2 ring-violet-500/20 !border-violet-400/30" : ""}
+                                        ${isSimulated ? "opacity-50 grayscale-[0.8]" : ""}
+                                        ${!sub.active ? "opacity-60" : ""}`}
+                                    style={{ animationDelay: `${idx * 60}ms` }}>
+
+                                    {/* Header row */}
+                                    <div className="p-4 md:p-5 flex items-center gap-4 cursor-pointer"
+                                        onClick={() => setExpandedId(isExpanded ? null : sub.id)}>
+
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white shadow-sm ring-2 transition-transform duration-300 ${meta.ring}`}
+                                            style={{
+                                                backgroundColor: sub.color || '#8b5cf6',
+                                                transform: isExpanded ? 'scale(1.08) rotate(-3deg)' : 'scale(1)',
+                                            }}>
+                                            <span className="material-icons-round text-xl">{sub.icon || "sync"}</span>
                                         </div>
-                                        <div className="flex items-center justify-between mt-0.5">
+
+                                        <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                <span className={`text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md ${sub.type === "critical" ? "text-slate-500 bg-slate-100 dark:bg-slate-800" :
-                                                    sub.type === "productive" ? "text-violet-600 bg-violet-50 dark:bg-violet-900/20" :
-                                                        "text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-900/20"
-                                                    }`}>{TYPE_LABELS[sub.type]?.label || sub.type}</span>
-                                                <span className="text-xs text-slate-400">{FREQ[sub.frequency] || sub.frequency}</span>
+                                                <h3 className="font-bold text-slate-900 dark:text-white truncate">{sub.name}</h3>
+                                                {!sub.active && (
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400">Pausada</span>
+                                                )}
                                             </div>
-                                            <p className={`text-xs font-medium ${isSoon ? "text-amber-600" : "text-slate-400"}`}>
-                                                {dLeft === 0 ? "Hoy" : `${dLeft} días`}
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${meta.badge}`}>
+                                                    {meta.label}
+                                                </span>
+                                                <span className="text-[11px] text-slate-400">{FREQ[sub.frequency] || sub.frequency}</span>
+                                                <span className="w-0.5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                                <span className={`text-[11px] font-medium ${isOverdue ? "text-red-500" : isSoon ? "text-amber-600" : "text-slate-400"}`}>
+                                                    {daysLabel(d)}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-right shrink-0">
+                                            <p className="text-base font-bold text-slate-900 dark:text-white tabular-nums">
+                                                {formatCurrency(sub.amount)}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 tabular-nums">
+                                                {formatCurrency(toMonthly(sub.amount, sub.frequency))}/mes
                                             </p>
                                         </div>
+
+                                        <span className={`material-icons-round text-slate-300 dark:text-slate-600 transition-transform duration-300 ${isExpanded ? "rotate-180 !text-violet-500" : ""}`}>
+                                            expand_more
+                                        </span>
                                     </div>
 
-                                    {/* Expand Chevron */}
-                                    <span className={`material-icons-round text-slate-300 transition-transform duration-300 ${isExpanded ? "rotate-180 text-violet-500" : ""}`}>expand_more</span>
+                                    {/* Expanded panel */}
+                                    {isExpanded && (
+                                        <div className="collapse-expand border-t border-slate-100/60 dark:border-white/5 px-4 md:px-5 py-4 bg-white/30 dark:bg-white/[0.02]">
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                                <div>
+                                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Categor&iacute;a</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="material-icons-round text-sm text-violet-400">label</span>
+                                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                            {(CATEGORIES[sub.category as keyof typeof CATEGORIES] || CATEGORIES.otros).label}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Pr&oacute;ximo cobro</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`material-icons-round text-sm ${isOverdue ? "text-red-400" : "text-violet-400"}`}>event</span>
+                                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                                            {new Date(sub.nextDate).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">M&eacute;todo de pago</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="material-icons-round text-sm text-violet-400">credit_card</span>
+                                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                                                            {sub.creditCard ? `\u00b7\u00b7\u00b7\u00b7${sub.creditCard.lastFour}` : sub.account ? sub.account.name : "Sin asignar"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Costo anual</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="material-icons-round text-sm text-violet-400">savings</span>
+                                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+                                                            {formatCurrency(toYearly(sub.amount, sub.frequency))}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Tenure bar */}
+                                            {sub.createdAt && (
+                                                <div className="mb-4 p-3 rounded-xl bg-white/40 dark:bg-white/[0.03] border border-slate-100/50 dark:border-white/5">
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Antig&uuml;edad</span>
+                                                        <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 tabular-nums">
+                                                            {monthsSince(sub.createdAt)} meses &middot; {formatCurrency(toMonthly(sub.amount, sub.frequency) * monthsSince(sub.createdAt))} total pagado
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+                                                        <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400 transition-all duration-1000"
+                                                            style={{ width: `${Math.min(100, (monthsSince(sub.createdAt) / 12) * 100)}%` }} />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Actions */}
+                                            <div className="flex gap-2">
+                                                <button onClick={(e) => { e.stopPropagation(); toggleSimulate(sub.id); }}
+                                                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${isSimulated
+                                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40"
+                                                        : "bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 border border-slate-200/60 dark:border-white/10 hover:border-amber-200 dark:hover:border-amber-800/40"
+                                                        }`}>
+                                                    <span className="material-icons-round text-sm">science</span>
+                                                    {isSimulated ? "Restaurar" : "Simular"}
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); toggleActive(sub); }}
+                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40">
+                                                    <span className="material-icons-round text-sm">{sub.active ? "pause" : "play_arrow"}</span>
+                                                    {sub.active ? "Pausar" : "Activar"}
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); openEdit(sub); }}
+                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40">
+                                                    <span className="material-icons-round text-sm">edit</span>
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); del(sub.id); }}
+                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-red-500 hover:border-red-200 dark:hover:border-red-800/40">
+                                                    <span className="material-icons-round text-sm">delete_outline</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Expanded Details */}
-                                {isExpanded && (
-                                    <div className="collapse-expand bg-slate-50/50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 p-4">
-                                        <div className="grid grid-cols-2 gap-4 mb-4">
-                                            <div>
-                                                <span className="text-xs text-slate-400 block mb-1">Categoría</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="material-icons-round text-sm text-slate-500">label</span>
-                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{(CATEGORIES[sub.category as keyof typeof CATEGORIES] || CATEGORIES.otros).label}</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span className="text-xs text-slate-400 block mb-1">Próximo cobro</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="material-icons-round text-sm text-slate-500">event</span>
-                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{new Date(sub.nextDate).toLocaleDateString()}</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span className="text-xs text-slate-400 block mb-1">Método de pago</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="material-icons-round text-sm text-slate-500">credit_card</span>
-                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                                        {sub.creditCard ? `Tarjeta ends ${sub.creditCard.lastFour}` : sub.account ? sub.account.name : "No especificado"}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span className="text-xs text-slate-400 block mb-1">Costo anual</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="material-icons-round text-sm text-slate-500">savings</span>
-                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums">{formatCurrency(toYearly(sub.amount, sub.frequency))}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/50 mt-2">
-                                            <button onClick={(e) => { e.stopPropagation(); toggleSimulate(sub.id); }}
-                                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2 ${isSimulated
-                                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                                    : "bg-white dark:bg-white/5 text-slate-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600 border border-slate-200 dark:border-slate-700"}`}>
-                                                <span className="material-icons-round text-sm">science</span>
-                                                {isSimulated ? "Restaurar" : "Simular Cancelación"}
-                                            </button>
-                                            <button onClick={(e) => { e.stopPropagation(); openEdit(sub); }}
-                                                className="px-4 py-2 rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-slate-700 text-slate-600 hover:text-violet-600 hover:border-violet-200 text-xs font-bold">
-                                                Editar
-                                            </button>
-                                            <button onClick={(e) => { e.stopPropagation(); del(sub.id); }}
-                                                className="px-4 py-2 rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-slate-700 text-slate-600 hover:text-red-500 hover:border-red-200 text-xs font-bold">
-                                                Eliminar
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* ═══════════ FLOATING SIMULATOR BAR ═══════════ */}
-            {simulateCancelled.size > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-slate-900/90 dark:bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-4 flex items-center justify-between text-white dark:text-slate-900 z-50 animate-slide-up border border-white/10">
-                    <div>
-                        <p className="text-xs opacity-80 mb-0.5">Ahorro potencial ({simulateCancelled.size} items)</p>
-                        <p className="text-xl font-bold tabular-nums">{formatCurrency(simSavingsMonthly)}<span className="text-sm font-normal opacity-60">/mes</span></p>
+                            );
+                        })}
                     </div>
-                    <button onClick={() => setSimulateCancelled(new Set())}
-                        className="px-4 py-2 bg-white/20 dark:bg-slate-900/10 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors">
-                        Descartar
-                    </button>
+                )}
+            </section>
+
+            {/* AI INSIGHTS - Liquid Glass */}
+            {insights.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2.5 mb-4">
+                        <div className="w-[3px] h-5 rounded-full bg-gradient-to-b from-violet-400/80 to-violet-600/40" />
+                        <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Inteligencia</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {insights.map((ins, i) => (
+                            <div key={i} className={`liquid-glass rounded-xl p-4 liquid-settle ${
+                                ins.type === "warn" ? "!border-amber-300/30 dark:!border-amber-700/20" :
+                                ins.type === "danger" ? "!border-red-300/30 dark:!border-red-700/20" :
+                                ins.type === "success" ? "!border-emerald-300/30 dark:!border-emerald-700/20" :
+                                "!border-violet-300/30 dark:!border-violet-700/20"
+                            }`} style={{ animationDelay: `${400 + i * 80}ms` }}>
+                                <div className="flex items-start gap-3">
+                                    <span className={`material-icons-round text-lg mt-0.5 ${
+                                        ins.type === "warn" ? "text-amber-500" :
+                                        ins.type === "danger" ? "text-red-500" :
+                                        ins.type === "success" ? "text-emerald-500" :
+                                        "text-violet-500"
+                                    }`}>{ins.icon}</span>
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-800 dark:text-white">{ins.title}</p>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{ins.desc}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* COST BREAKDOWN - Type Cards */}
+            {monthlyTotal > 0 && (
+                <section>
+                    <div className="flex items-center gap-2.5 mb-4">
+                        <div className="w-[3px] h-5 rounded-full bg-gradient-to-b from-violet-400/80 to-violet-600/40" />
+                        <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Desglose por Tipo</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {([
+                            { key: "critical", total: criticalTotal, pct: criticalPct, color: "from-slate-500 to-slate-700", subs: activeSubs.filter(s => s.type === "critical") },
+                            { key: "productive", total: productiveTotal, pct: productivePct, color: "from-violet-400 to-violet-600", subs: activeSubs.filter(s => s.type === "productive") },
+                            { key: "entertainment", total: entertainmentTotal, pct: entertainmentPct, color: "from-fuchsia-400 to-fuchsia-500", subs: activeSubs.filter(s => s.type === "entertainment") },
+                        ] as const).map(group => {
+                            const meta = TYPE_META[group.key];
+                            return (
+                                <div key={group.key} className="liquid-glass rounded-2xl p-5 liquid-settle">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="material-icons-round text-base text-violet-500">{meta.icon}</span>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">{meta.label}</span>
+                                        <span className="ml-auto text-[10px] font-bold text-slate-400 tabular-nums">{group.pct}%</span>
+                                    </div>
+                                    <p className="text-2xl font-black text-slate-900 dark:text-white tabular-nums mb-3">
+                                        {formatCurrency(group.total)}
+                                    </p>
+                                    <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden mb-3">
+                                        <div className={`h-full rounded-full bg-gradient-to-r ${group.color} transition-all duration-1000`}
+                                            style={{ width: `${group.pct}%` }} />
+                                    </div>
+                                    {group.subs.length > 0 ? (
+                                        <div className="space-y-1.5">
+                                            {group.subs.slice(0, 3).map(s => (
+                                                <div key={s.id} className="flex items-center gap-2 text-[11px]">
+                                                    <div className="w-5 h-5 rounded-md flex items-center justify-center text-white"
+                                                        style={{ backgroundColor: s.color || '#8b5cf6', fontSize: '10px' }}>
+                                                        <span className="material-icons-round" style={{ fontSize: '12px' }}>{s.icon || "sync"}</span>
+                                                    </div>
+                                                    <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{s.name}</span>
+                                                    <span className="text-slate-500 dark:text-slate-400 tabular-nums font-medium">{formatCurrency(toMonthly(s.amount, s.frequency))}</span>
+                                                </div>
+                                            ))}
+                                            {group.subs.length > 3 && (
+                                                <p className="text-[10px] text-slate-400 pl-7">+{group.subs.length - 3} m&aacute;s</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] text-slate-400">Sin suscripciones</p>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
+            {/* FLOATING SIMULATOR BAR */}
+            {simulateCancelled.size > 0 && (
+                <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-50 animate-slide-up">
+                    <div className="liquid-glass !bg-slate-900/85 dark:!bg-white/90 !border-white/10 dark:!border-slate-200 rounded-2xl shadow-2xl p-4 flex items-center justify-between text-white dark:text-slate-900">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider opacity-60 mb-0.5">
+                                Ahorro potencial &middot; {simulateCancelled.size} {simulateCancelled.size === 1 ? "item" : "items"}
+                            </p>
+                            <div className="flex items-baseline gap-2">
+                                <p className="text-xl font-black tabular-nums">{formatCurrency(simSavingsMonthly)}<span className="text-sm font-normal opacity-60">/mes</span></p>
+                                <p className="text-xs opacity-50 tabular-nums">{formatCurrency(simSavingsMonthly * 12)}/a&ntilde;o</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setSimulateCancelled(new Set())}
+                            className="p-2.5 bg-white/15 dark:bg-slate-900/10 hover:bg-white/25 rounded-xl transition-colors">
+                            <span className="material-icons-round text-lg">close</span>
+                        </button>
+                    </div>
                 </div>
             )}
 
-            {/* ═══════════ MODAL ═══════════ */}
-            <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar Suscripción" : "Nueva Suscripción"}>
+            {/* MODAL */}
+            <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar Suscripci\u00f3n" : "Nueva Suscripci\u00f3n"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Name */}
                     <div>
                         <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Nombre</label>
                         <input className="input-field focus:ring-violet-500 focus:border-violet-500" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Netflix, Spotify, ChatGPT..." required />
-                        {/* PWA fix for keyboard focus */}
                     </div>
 
-                    {/* Amount + Frequency */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Monto</label>
@@ -424,15 +659,14 @@ export default function SuscripcionesPage() {
                         </div>
                     </div>
 
-                    {/* Type */}
                     <div>
                         <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Tipo</label>
                         <div className="grid grid-cols-3 gap-2">
                             {(["critical", "productive", "entertainment"] as const).map(t => {
-                                const info = TYPE_LABELS[t];
+                                const info = TYPE_META[t];
                                 return (
                                     <button key={t} type="button" onClick={() => setForm({ ...form, type: t })}
-                                        className={`py-2.5 rounded-lg text-xs font-semibold transition-all border flex flex-col items-center gap-1 ${form.type === t
+                                        className={`py-2.5 rounded-xl text-xs font-semibold transition-all border flex flex-col items-center gap-1 ${form.type === t
                                             ? "bg-violet-50 border-violet-200 text-violet-700 dark:bg-violet-900/30 dark:border-violet-700 dark:text-violet-300"
                                             : "bg-white dark:bg-[#1a262d] text-slate-500 border-slate-200 dark:border-slate-700 hover:border-slate-300"}`}>
                                         <span className="material-icons-round text-base">{info.icon}</span>
@@ -443,24 +677,22 @@ export default function SuscripcionesPage() {
                         </div>
                     </div>
 
-                    {/* Category + Next Date */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Categoría</label>
+                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Categor&iacute;a</label>
                             <select className="input-field focus:ring-violet-500 focus:border-violet-500" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
                                 {CATEGORY_KEYS.map(k => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Próximo cobro</label>
+                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Pr&oacute;ximo cobro</label>
                             <input className="input-field focus:ring-violet-500 focus:border-violet-500" type="date" value={form.nextDate} onChange={e => setForm({ ...form, nextDate: e.target.value })} required />
                         </div>
                     </div>
 
-                    {/* Destination (Account) */}
                     <div>
                         <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Se cobra en</label>
-                        <div className="grid grid-cols-1 gap-2 max-h-36 overflow-y-auto pr-1">
+                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-1">
                             <button type="button" onClick={() => setForm({ ...form, accountId: "", creditCardId: "" })}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left border transition-all text-xs ${!form.accountId && !form.creditCardId ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20" : "border-slate-200 dark:border-slate-700 hover:border-slate-300"}`}>
                                 <span className="material-icons-round text-slate-400 text-lg">block</span>
@@ -475,17 +707,25 @@ export default function SuscripcionesPage() {
                                     <span className="text-slate-700 dark:text-slate-300 font-medium">{a.name}</span>
                                 </button>
                             ))}
+                            {cards.map(c => (
+                                <button key={c.id} type="button" onClick={() => setForm({ ...form, creditCardId: c.id, accountId: "" })}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left border transition-all text-xs ${form.creditCardId === c.id ? "border-violet-500 bg-violet-50 dark:bg-violet-900/20" : "border-slate-200 dark:border-slate-700 hover:border-slate-300"}`}>
+                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: c.color }}>
+                                        <span className="material-icons-round text-sm">credit_card</span>
+                                    </div>
+                                    <span className="text-slate-700 dark:text-slate-300 font-medium">{c.name} &middot;&middot;&middot;&middot;{c.lastFour}</span>
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Icon picker */}
                     <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Ícono</label>
+                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">&Iacute;cono</label>
                         <div className="flex flex-wrap gap-2">
-                            {SUB_ICONS.slice(0, 10).map(ic => (
+                            {SUB_ICONS.map(ic => (
                                 <button key={ic} type="button" onClick={() => setForm({ ...form, icon: ic })}
                                     className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all border ${form.icon === ic
-                                        ? "bg-violet-50 border-violet-500 text-violet-600"
+                                        ? "bg-violet-50 border-violet-500 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300"
                                         : "bg-white dark:bg-[#1a262d] border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 hover:border-slate-300"}`}>
                                     <span className="material-icons-round text-lg">{ic}</span>
                                 </button>
@@ -493,10 +733,11 @@ export default function SuscripcionesPage() {
                         </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex gap-3 pt-2">
                         <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-                        <button type="submit" className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold shadow-lg shadow-violet-500/20 transition-all">{editing ? "Guardar" : "Crear"}</button>
+                        <button type="submit" className="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-all active:scale-[0.97]">
+                            {editing ? "Guardar" : "Crear"}
+                        </button>
                     </div>
                 </form>
             </Modal>

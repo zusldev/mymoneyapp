@@ -2,16 +2,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
-
-/* ═══ Types ═══ */
-interface Account { id: string; name: string; icon: string; color: string; }
-interface CreditCard { id: string; name: string; bank: string; lastFour: string; color: string; }
-interface Income {
-    id: string; name: string; amount: number; frequency: string; type: string;
-    nextDate: string; source: string; active: boolean; color: string; icon: string;
-    accountId: string | null; creditCardId: string | null;
-    account?: Account | null; creditCard?: CreditCard | null;
-}
+import type { Account, Income } from "../lib/types";
 
 const FREQ: Record<string, string> = { monthly: "Mensual", biweekly: "Quincenal", weekly: "Semanal" };
 const FREQ_MONTHLY: Record<string, number> = { monthly: 1, biweekly: 2, weekly: 4.33 };
@@ -46,20 +37,38 @@ function getNextOccurrences(incomes: Income[], count: number) {
         const base = new Date(inc.nextDate);
         base.setHours(0, 0, 0, 0);
 
-        const freqDays = inc.frequency === "weekly" ? 7 : inc.frequency === "biweekly" ? 15 : 30;
         let d = new Date(base);
 
-        // Find first future occurrence
-        while (d < now) d = new Date(d.getTime() + freqDays * 86400000);
+        // Find first future occurrence using proper date arithmetic
+        while (d < now) {
+            d = advanceDate(d, inc.frequency);
+        }
 
         // Collect next occurrences
         for (let i = 0; i < 4 && events.length < count * 3; i++) {
             events.push({ income: inc, date: new Date(d) });
-            d = new Date(d.getTime() + freqDays * 86400000);
+            d = advanceDate(d, inc.frequency);
         }
     }
 
     return events.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, count);
+}
+
+function advanceDate(d: Date, frequency: string): Date {
+    const next = new Date(d);
+    switch (frequency) {
+        case "weekly":
+            next.setDate(next.getDate() + 7);
+            break;
+        case "biweekly":
+            next.setDate(next.getDate() + 14);
+            break;
+        case "monthly":
+        default:
+            next.setMonth(next.getMonth() + 1);
+            break;
+    }
+    return next;
 }
 
 function getStabilityInfo(fixedPct: number): { label: string; color: string; icon: string; bg: string } {
@@ -115,15 +124,27 @@ export default function IngresosPage() {
     };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const url = editing ? `/api/incomes/${editing.id}` : "/api/incomes";
-        await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-        setModalOpen(false);
-        fetchData();
+        try {
+            const url = editing ? `/api/incomes/${editing.id}` : "/api/incomes";
+            const res = await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+            if (!res.ok) throw new Error("Error al guardar");
+            setModalOpen(false);
+            fetchData();
+        } catch { alert("Error al guardar el ingreso. Intenta de nuevo."); }
     };
-    const del = async (id: string) => { if (!confirm("¿Eliminar este ingreso?")) return; await fetch(`/api/incomes/${id}`, { method: "DELETE" }); fetchData(); };
+    const del = async (id: string) => {
+        if (!confirm("¿Eliminar este ingreso?")) return;
+        try {
+            const res = await fetch(`/api/incomes/${id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error("Error al eliminar");
+            fetchData();
+        } catch { alert("Error al eliminar el ingreso."); }
+    };
     const toggleActive = async (i: Income) => {
-        await fetch(`/api/incomes/${i.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !i.active }) });
-        fetchData();
+        try {
+            await fetch(`/api/incomes/${i.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !i.active }) });
+            fetchData();
+        } catch { alert("Error al actualizar el ingreso."); }
     };
 
     /* ── Loading ── */
@@ -135,6 +156,13 @@ export default function IngresosPage() {
 
     return (
         <div className="max-w-5xl mx-auto space-y-8">
+            {/* ═══ Green ambient — Income identity ═══ */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+                <div className="absolute -top-20 right-10 w-[420px] h-[420px] rounded-full opacity-[0.05]"
+                    style={{ background: 'radial-gradient(circle, #10b981, transparent 70%)' }} />
+                <div className="absolute top-1/2 -left-32 w-[350px] h-[350px] rounded-full opacity-[0.035]"
+                    style={{ background: 'radial-gradient(circle, #34d399, transparent 70%)' }} />
+            </div>
 
             {/* ═══════════ HEADER ═══════════ */}
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -243,7 +271,7 @@ export default function IngresosPage() {
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-bold text-slate-900 dark:text-white">Fuentes de Ingreso</h2>
                     <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300">
-                        {incomes.length} activa{incomes.length !== 1 ? "s" : ""}
+                        {active.length} activa{active.length !== 1 ? "s" : ""}
                     </span>
                 </div>
 

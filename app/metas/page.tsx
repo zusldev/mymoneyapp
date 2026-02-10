@@ -2,8 +2,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
-
-interface Goal { id: string; name: string; targetAmount: number; currentAmount: number; deadline: string; priority: string; color: string; }
+import type { Goal } from "../lib/types";
 const colorOpts = ["#10b981", "#06b6d4", "#8b5cf6", "#f59e0b", "#ef4444", "#ec4899", "#3b82f6"];
 
 export default function MetasPage() {
@@ -12,7 +11,7 @@ export default function MetasPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Goal | null>(null);
     const [form, setForm] = useState({ name: "", targetAmount: "", currentAmount: "0", deadline: "", priority: "medium", color: "#10b981" });
-    const [now, setNow] = useState<number>(0);
+    const [now, setNow] = useState<number>(() => Date.now());
 
     const fetch_ = () => { fetch("/api/goals").then(r => r.json()).then(setGoals).finally(() => setLoading(false)); };
     // eslint-disable-next-line

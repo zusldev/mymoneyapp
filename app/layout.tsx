@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "./components/Sidebar";
 import { MobileNav } from "./components/MobileNav";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -66,7 +67,9 @@ export default function RootLayout({
             {/* Page Content */}
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-24 md:pb-8">
               <div className="page-enter">
-                {children}
+                <ErrorBoundary>
+                  {children}
+                </ErrorBoundary>
               </div>
             </div>
           </main>

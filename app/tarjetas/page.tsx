@@ -3,20 +3,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency, analyzeCreditCard } from "../lib/financialEngine";
-
-interface CardData {
-    id: string;
-    name: string;
-    bank: string;
-    lastFour: string;
-    creditLimit: number;
-    balance: number;
-    cutDate: number;
-    payDate: number;
-    apr: number;
-    color: string;
-    _count?: { transactions: number };
-}
+import type { CardData } from "../lib/types";
 
 // Gradient presets for visual cards
 const CARD_GRADIENTS = [
@@ -41,7 +28,7 @@ export default function TarjetasPage() {
     });
 
     const fetchCards = () => {
-        fetch("/api/credit-cards").then((r) => r.json()).then(setCards).finally(() => setLoading(false));
+        fetch("/api/credit-cards").then((r) => r.json()).then(d => setCards(Array.isArray(d) ? d : [])).finally(() => setLoading(false));
     };
 
     useEffect(() => { fetchCards(); }, []);
@@ -69,17 +56,23 @@ export default function TarjetasPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const method = editingCard ? "PUT" : "POST";
-        const url = editingCard ? `/api/credit-cards/${editingCard.id}` : "/api/credit-cards";
-        await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-        setModalOpen(false);
-        fetchCards();
+        try {
+            const method = editingCard ? "PUT" : "POST";
+            const url = editingCard ? `/api/credit-cards/${editingCard.id}` : "/api/credit-cards";
+            const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+            if (!res.ok) throw new Error("Error al guardar");
+            setModalOpen(false);
+            fetchCards();
+        } catch { alert("Error al guardar la tarjeta. Intenta de nuevo."); }
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm("¿Eliminar esta tarjeta?")) return;
-        await fetch(`/api/credit-cards/${id}`, { method: "DELETE" });
-        fetchCards();
+        try {
+            const res = await fetch(`/api/credit-cards/${id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error("Error al eliminar");
+            fetchCards();
+        } catch { alert("Error al eliminar la tarjeta."); }
     };
 
     // Utilization severity
@@ -256,7 +249,7 @@ export default function TarjetasPage() {
 
                                     <div className="mt-3 flex justify-between items-center text-xs text-slate-400">
                                         <span>Corte: Día {card.cutDate}</span>
-                                        <button className="text-[#2badee] hover:underline">Ver Transacciones</button>
+                                        <a href="/transacciones" className="text-[#2badee] hover:underline">Ver Transacciones</a>
                                     </div>
                                 </div>
                             </div>
