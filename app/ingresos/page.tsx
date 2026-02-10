@@ -198,7 +198,7 @@ export default function IngresosPage() {
                                 className={`snap-start shrink-0 w-40 p-4 rounded-2xl border transition-all relative overflow-hidden group
                                 ${isNext
                                         ? "bg-emerald-600 text-white border-emerald-600 shadow-xl shadow-emerald-600/20 rhythm-fade"
-                                        : "bg-white dark:bg-[#1a262d] border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300"
+                                        : "liquid-card text-slate-600 dark:text-slate-300"
                                     }`}>
                                 {isNext && <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full -mr-6 -mt-6 blur-xl" />}
 
@@ -291,7 +291,7 @@ export default function IngresosPage() {
                             <div key={inc.id} className={`relative p-5 rounded-2xl border transition-all group hover:shadow-md
                                 ${!inc.active
                                     ? "bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 grayscale opacity-70"
-                                    : "bg-white dark:bg-[#1a262d] border-slate-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-800"
+                                    : "liquid-card liquid-card-hover hover:border-emerald-200 dark:hover:border-emerald-800"
                                 }`}>
 
                                 <div className="flex justify-between items-start mb-4">

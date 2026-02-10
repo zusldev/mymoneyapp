@@ -52,7 +52,7 @@ export default function RootLayout({
             <div className="absolute top-0 right-0 w-96 h-96 bg-[#2badee]/[0.03] rounded-full blur-3xl -z-10 pointer-events-none translate-x-1/3 -translate-y-1/3" />
 
             {/* Header */}
-            <header className="h-16 px-4 sm:px-8 flex items-center justify-end sticky top-0 z-10 backdrop-blur-xl bg-[#f6f7f8]/80 dark:bg-[#101c22]/80 border-b border-slate-200/50 dark:border-slate-800/50">
+            <header className="h-16 px-4 sm:px-8 flex items-center justify-end sticky top-0 z-10 glass-header">
               <div className="flex items-center gap-3">
                 <button className="relative p-2 text-slate-400 hover:text-[#2badee] transition-all duration-200 hover:bg-[#2badee]/5 rounded-xl">
                   <span className="material-icons-round text-xl">notifications</span>

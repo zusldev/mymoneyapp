@@ -76,7 +76,7 @@ export default function AsistentePage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg stagger-children">
                             {quickActions.map((action, i) => (
                                 <button key={i} onClick={() => sendMessage(action.label)}
-                                    className="bg-white dark:bg-[#1a262d] rounded-xl p-4 text-left border border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-[#2badee]/30 transition-all group">
+                                    className="liquid-card liquid-card-hover rounded-xl p-4 text-left group">
                                     <span className="material-icons-round text-[#2badee] mb-2 group-hover:scale-110 transition-transform inline-block">{action.icon}</span>
                                     <p className="text-sm text-slate-600 dark:text-slate-300">{action.label}</p>
                                 </button>

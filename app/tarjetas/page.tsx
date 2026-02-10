@@ -96,7 +96,7 @@ export default function TarjetasPage() {
         <div className="space-y-8 stagger-children">
             {/* ═══ Summary Stats ═══ */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white dark:bg-[#1a262d] p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 hover-lift">
+                <div className="liquid-card liquid-card-hover p-6 rounded-xl">
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Saldo Total</p>
                     <div className="flex items-baseline gap-2">
                         <h3 className="text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
@@ -110,14 +110,14 @@ export default function TarjetasPage() {
                     </div>
                 </div>
 
-                <div className="bg-white dark:bg-[#1a262d] p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 hover-lift">
+                <div className="liquid-card liquid-card-hover p-6 rounded-xl">
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Crédito Total</p>
                     <h3 className="text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
                         {formatCurrency(totalLimit)}
                     </h3>
                 </div>
 
-                <div className="bg-white dark:bg-[#1a262d] p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 relative overflow-hidden group">
+                <div className="liquid-card rounded-xl p-6 relative overflow-hidden group">
                     <div className="absolute right-0 top-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                         <span className="material-icons-round text-6xl text-[#2badee]">pie_chart</span>
                     </div>
@@ -210,7 +210,7 @@ export default function TarjetasPage() {
                                 </div>
 
                                 {/* Details Panel */}
-                                <div className="mt-4 bg-white dark:bg-[#1a262d] rounded-xl border border-slate-100 dark:border-slate-800 p-5 shadow-sm">
+                                <div className="mt-4 liquid-card rounded-xl p-5">
                                     <div className="flex justify-between items-center mb-4">
                                         <div>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Saldo Actual</p>
@@ -275,7 +275,7 @@ export default function TarjetasPage() {
             </div>
 
             {cards.length === 0 && (
-                <div className="text-center py-16 bg-white dark:bg-[#1a262d] rounded-2xl border border-slate-100 dark:border-slate-800">
+                <div className="text-center py-16 liquid-card rounded-2xl">
                     <span className="material-icons-round text-5xl text-slate-300 mb-4">credit_card</span>
                     <p className="text-slate-500">No hay tarjetas registradas</p>
                     <button onClick={openCreate} className="btn-primary mt-4">Agregar Tarjeta</button>
