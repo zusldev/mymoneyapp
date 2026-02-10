@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+export async function GET() {
+    return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
+}
+
 export async function PUT(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }

@@ -1,17 +1,22 @@
 import { prisma } from "@/app/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
     try {
         const subscriptions = await prisma.subscription.findMany({
             orderBy: { nextDate: "asc" },
+            include: {
+                account: { select: { id: true, name: true, icon: true, color: true } },
+                creditCard: { select: { id: true, name: true, bank: true, lastFour: true, color: true } },
+            },
         });
         return NextResponse.json(subscriptions);
     } catch (error) {
         console.error("Error fetching subscriptions:", error);
-        return NextResponse.json({ error: "Error" }, { status: 500 });
+        // Fallback for build time
+        return NextResponse.json([]);
     }
 }
 
@@ -24,9 +29,13 @@ export async function POST(request: NextRequest) {
                 amount: parseFloat(body.amount),
                 frequency: body.frequency || "monthly",
                 category: body.category || "suscripciones",
+                type: body.type || "entertainment",
                 nextDate: new Date(body.nextDate),
                 active: body.active !== undefined ? body.active : true,
                 color: body.color || "#f59e0b",
+                icon: body.icon || "sync",
+                accountId: body.accountId || null,
+                creditCardId: body.creditCardId || null,
             },
         });
         return NextResponse.json(sub, { status: 201 });

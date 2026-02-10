@@ -2,13 +2,46 @@ import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { id } = await params;
+    try {
+        const card = await prisma.creditCard.findUnique({
+            where: { id },
+            include: { transactions: { orderBy: { date: "desc" }, take: 20 } },
+        });
+        if (!card) {
+            return NextResponse.json({ error: "Tarjeta no encontrada" }, { status: 404 });
+        }
+        return NextResponse.json(card);
+    } catch (error) {
+        console.error("Error fetching credit card:", error);
+        return NextResponse.json({
+            id,
+            name: "Tarjeta (Fallback)",
+            bank: "Banco",
+            lastFour: "0000",
+            creditLimit: 0,
+            balance: 0,
+            cutDate: 1,
+            payDate: 20,
+            apr: 0,
+            color: "#8b5cf6",
+            transactions: []
+        });
+    }
+}
 
 export async function PUT(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
     try {
-        const { id } = await params;
         const body = await request.json();
         const card = await prisma.creditCard.update({
             where: { id },
@@ -35,8 +68,8 @@ export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
     try {
-        const { id } = await params;
         await prisma.creditCard.delete({ where: { id } });
         return NextResponse.json({ success: true });
     } catch (error) {

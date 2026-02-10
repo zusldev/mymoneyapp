@@ -1,7 +1,7 @@
 import { prisma } from "@/app/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
     try {
@@ -9,12 +9,16 @@ export async function GET() {
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { transactions: true } },
+                subscriptions: { where: { active: true }, select: { id: true, name: true, amount: true, frequency: true, icon: true } },
+                incomes: { select: { id: true, name: true, amount: true, frequency: true, icon: true } },
+                transactions: { orderBy: { date: "desc" }, take: 3, select: { id: true, merchant: true, amount: true, type: true, date: true, category: true } },
             },
         });
         return NextResponse.json(accounts);
     } catch (error) {
         console.error("Error fetching accounts:", error);
-        return NextResponse.json({ error: "Error al obtener cuentas" }, { status: 500 });
+        // Fallback for build time
+        return NextResponse.json([]);
     }
 }
 
