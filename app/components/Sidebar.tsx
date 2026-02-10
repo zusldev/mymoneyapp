@@ -19,7 +19,7 @@ export function Sidebar() {
     const pathname = usePathname();
 
     return (
-        <aside className="hidden md:flex w-20 lg:w-64 bg-white dark:bg-[#1a262d] border-r border-slate-200 dark:border-slate-800 flex-col justify-between transition-all duration-300 z-20">
+        <aside className="hidden md:flex w-20 lg:w-64 glass-sidebar flex-col justify-between transition-all duration-300 z-20">
             <div>
                 {/* Logo */}
                 <div className="h-20 flex items-center justify-center lg:justify-start lg:px-8 border-b border-slate-100 dark:border-slate-800">

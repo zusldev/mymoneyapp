@@ -159,7 +159,7 @@ export default function CalendarioPage() {
                     </p>
                 </div>
 
-                <div className="flex items-center bg-white dark:bg-[#1a262d] p-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="flex items-center liquid-chip p-1 rounded-lg">
                     <button onClick={prevMonth} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400">
                         <span className="material-icons-round text-xl">chevron_left</span>
                     </button>
@@ -172,7 +172,7 @@ export default function CalendarioPage() {
                 </div>
 
                 <div className="flex gap-3">
-                    <button onClick={goToToday} className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-[#1a262d] border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm">
+                    <button onClick={goToToday} className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 liquid-chip rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         Hoy
                     </button>
                     <Link href="/transacciones" className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#2badee] hover:bg-[#1a8cb5] rounded-lg shadow-md shadow-[#2badee]/20 transition-colors">
@@ -187,8 +187,8 @@ export default function CalendarioPage() {
 
                 {/* Calendar Section */}
                 <div className="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
-                    <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden overflow-x-auto">
-                        <div className="min-w-[800px]">
+                    <div className="liquid-card rounded-xl overflow-hidden overflow-x-auto">
+                        <div className="min-w-[640px] md:min-w-0">
                             {/* Headers */}
                             <div className="grid grid-cols-[repeat(7,1fr)] border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
                                 {DAYS.map((d, i) => (
@@ -251,7 +251,7 @@ export default function CalendarioPage() {
                     </div>
 
                     {/* Chart Section */}
-                    <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                    <div className="liquid-card rounded-xl p-6">
                         <div className="flex items-center justify-between mb-6">
                             <div>
                                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Proyección de Balance</h3>
@@ -399,7 +399,7 @@ export default function CalendarioPage() {
                     </div>
 
                     {/* AI Insights */}
-                    <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+                    <div className="liquid-card rounded-xl p-5">
                         <div className="flex items-center gap-2 mb-4">
                             <span className="material-icons-round text-[#2badee]">auto_awesome</span>
                             <h3 className="font-bold text-slate-900 dark:text-white">AI Insights</h3>
@@ -444,7 +444,7 @@ export default function CalendarioPage() {
                     </div>
 
                     {/* Upcoming List */}
-                    <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <div className="liquid-card rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
                             <h3 className="font-bold text-slate-900 dark:text-white">Próximos</h3>
                             <Link href="/transacciones" className="text-xs font-medium text-[#2badee] hover:text-[#1a8cb5]">Ver Todos</Link>

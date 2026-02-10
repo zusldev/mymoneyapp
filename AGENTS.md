@@ -94,7 +94,7 @@ Once the user authorizes, execute the complete flow without stopping:
 5. **Merge to develop**: `gh pr merge <number> --squash --delete-branch` (or `--merge` if trazability needed). Wait for checks; fix if they fail.
 6. **Release PR to main**: `git checkout develop` → `git pull` → `git checkout -b release/vX.Y.Z` → `git push -u origin release/vX.Y.Z` → `gh pr create --base main`.
 7. **Merge to main**: `gh pr merge <number> --merge --delete-branch`. Wait for checks; fix if they fail.
-8. **Tag + Release + Visual docs**: `git checkout main` → `git pull` → `git tag vX.Y.Z` → `git push origin vX.Y.Z` → `gh release create vX.Y.Z --generate-notes`. If the release includes UI changes, run `npm run screenshots -- vX.Y.Z` (requires dev server running + `SCREENSHOT_EMAIL` / `SCREENSHOT_PASSWORD` env vars), then `gh release upload vX.Y.Z public/releases/vX.Y.Z/*.png` and edit release notes to embed images. See `.claude/skills/release-visual-docs/SKILL.md` for full details.
+8. **Tag + Release + Visual docs**: `git checkout main` → `git pull` → `git tag vX.Y.Z` → `git push origin vX.Y.Z` → `gh release create vX.Y.Z --generate-notes`. If the release includes UI changes, ensure dev server is running (`npm run dev`), then run `npm run screenshots -- vX.Y.Z`, upload with `gh release upload vX.Y.Z public/releases/vX.Y.Z/*.png`, build a `RELEASE_NOTES.md` with embedded image links, run `gh release edit vX.Y.Z --notes-file RELEASE_NOTES.md`, and delete the temp file. See `.claude/skills/release-visual-docs/SKILL.md` for full details.
 9. **Sync develop**: `git checkout develop` → `git pull` → `git merge main` → `git push origin develop`.
 10. **Ready state**: Leave on `develop` branch with clean working tree, ready for next work.
 

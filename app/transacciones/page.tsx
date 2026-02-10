@@ -283,7 +283,7 @@ export default function TransaccionesPage() {
                     <button onClick={() => setShowAnalysis(!showAnalysis)}
                         className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all ${showAnalysis
                             ? "bg-slate-700/10 text-slate-700 dark:text-slate-200 border-slate-400/30"
-                            : "bg-white dark:bg-[#1a262d] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400"}`}>
+                            : "liquid-chip text-slate-600 dark:text-slate-300 hover:border-slate-400"}`}>
                         <span className="material-icons-round text-lg">insights</span>
                         Análisis
                     </button>
@@ -298,7 +298,7 @@ export default function TransaccionesPage() {
             {/* ═══════════ SECTION 1: INLINE TICKER STRIP ═══════════ */}
             <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar py-1">
                 {/* Income chip */}
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#1a262d] rounded-full border border-slate-100 dark:border-slate-800 shadow-sm shrink-0">
+                <div className="liquid-chip flex items-center gap-2 px-4 py-2.5 rounded-full shrink-0">
                     <span className="material-icons-round text-emerald-500 text-base">arrow_upward</span>
                     <span className="text-xs font-medium text-slate-500">Ingresos</span>
                     <span className="text-sm font-bold text-emerald-600 tabular-nums">+{formatCurrency(totalIncome)}</span>
@@ -306,7 +306,7 @@ export default function TransaccionesPage() {
                 {/* Divider */}
                 <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 shrink-0" />
                 {/* Expenses chip */}
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#1a262d] rounded-full border border-slate-100 dark:border-slate-800 shadow-sm shrink-0">
+                <div className="liquid-chip flex items-center gap-2 px-4 py-2.5 rounded-full shrink-0">
                     <span className="material-icons-round text-red-400 text-base">arrow_downward</span>
                     <span className="text-xs font-medium text-slate-500">Gastos</span>
                     <span className="text-sm font-bold text-red-500 tabular-nums">-{formatCurrency(totalExpenses)}</span>
@@ -314,7 +314,7 @@ export default function TransaccionesPage() {
                 {/* Divider */}
                 <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 shrink-0" />
                 {/* Net chip */}
-                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-full border shadow-sm shrink-0 ${netBalance >= 0 ? "bg-white dark:bg-[#1a262d] border-slate-100 dark:border-slate-800" : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"}`}>
+                <div className={`liquid-chip flex items-center gap-2 px-4 py-2.5 rounded-full shrink-0 ${netBalance < 0 ? "!bg-red-50/60 dark:!bg-red-900/10 !border-red-200 dark:!border-red-800" : ""}`}>
                     <span className={`material-icons-round text-base ${netBalance >= 0 ? "text-slate-600" : "text-red-500"}`}>balance</span>
                     <span className="text-xs font-medium text-slate-500">Neto</span>
                     <span className={`text-sm font-bold tabular-nums ${netBalance >= 0 ? "text-slate-800 dark:text-white" : "text-red-500"}`}>{netBalance >= 0 ? "+" : ""}{formatCurrency(netBalance)}</span>
@@ -322,7 +322,7 @@ export default function TransaccionesPage() {
                 {/* Divider */}
                 <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 shrink-0" />
                 {/* Anomalies chip */}
-                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-full border shadow-sm shrink-0 ${anomalies.length > 0 ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" : "bg-white dark:bg-[#1a262d] border-slate-100 dark:border-slate-800"}`}>
+                <div className={`liquid-chip flex items-center gap-2 px-4 py-2.5 rounded-full shrink-0 ${anomalies.length > 0 ? "!bg-amber-50/60 dark:!bg-amber-900/10 !border-amber-200 dark:!border-amber-800" : ""}`}>
                     <span className={`material-icons-round text-base ${anomalies.length > 0 ? "text-amber-500" : "text-emerald-500"}`}>{anomalies.length > 0 ? "warning" : "verified"}</span>
                     <span className={`text-sm font-bold tabular-nums ${anomalies.length > 0 ? "text-amber-600" : "text-emerald-600"}`}>{anomalies.length > 0 ? `${anomalies.length} alertas` : "✓ Limpio"}</span>
                 </div>
@@ -332,7 +332,7 @@ export default function TransaccionesPage() {
             {showAnalysis && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-slide-up">
                     {/* Category Breakdown */}
-                    <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-5">
+                    <div className="liquid-card rounded-xl p-5">
                         <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                             <span className="material-icons-round text-slate-500 text-lg">donut_small</span>
                             Gastos por Categoría
@@ -362,7 +362,7 @@ export default function TransaccionesPage() {
                     {/* Top Merchants + Anomalies */}
                     <div className="space-y-5">
                         {/* Top Merchants */}
-                        <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-5">
+                        <div className="liquid-card rounded-xl p-5">
                             <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="material-icons-round text-slate-500 text-lg">storefront</span>
                                 Comercios Frecuentes
@@ -384,7 +384,7 @@ export default function TransaccionesPage() {
 
                         {/* Anomaly List */}
                         {anomalies.length > 0 && (
-                            <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-5">
+                            <div className="liquid-card rounded-xl p-5">
                                 <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                                     <span className="material-icons-round text-amber-500 text-lg animate-pulse">auto_awesome</span>
                                     Detección Inteligente
@@ -483,7 +483,7 @@ export default function TransaccionesPage() {
                     ))}
 
                     {filtered.length === 0 && (
-                        <div className="text-center py-20 bg-white dark:bg-[#1a262d] rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div className="text-center py-20 liquid-card rounded-2xl">
                             <span className="material-icons-round text-6xl text-slate-200 dark:text-slate-700 mb-4 block">receipt_long</span>
                             <p className="text-slate-500 dark:text-slate-400 mb-2">No hay transacciones</p>
                             <button onClick={() => setModalOpen(true)} className="btn-primary mt-4">Agregar Primera</button>
@@ -498,7 +498,7 @@ export default function TransaccionesPage() {
                 {/* ── RIGHT: Sidebar ── */}
                 <div className="lg:col-span-4 space-y-5">
                     {/* Quick category breakdown (always visible) */}
-                    <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-5">
+                    <div className="liquid-card rounded-xl p-5">
                         <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                             <span className="material-icons-round text-slate-500 text-lg">pie_chart</span>
                             Resumen de Gastos
@@ -526,7 +526,7 @@ export default function TransaccionesPage() {
 
                     {/* Income vs Expense visual */}
                     {totalIncome > 0 && (
-                        <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-5">
+                        <div className="liquid-card rounded-xl p-5">
                             <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="material-icons-round text-slate-500 text-lg">balance</span>
                                 Ingreso vs Gasto
