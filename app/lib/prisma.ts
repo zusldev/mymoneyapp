@@ -4,30 +4,38 @@ import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
+    pool: Pool | undefined;
 };
 
-// Safe initialization to prevent build crashes if env is missing
-let prismaInstance: PrismaClient;
-
-try {
+function createPrismaClient(): PrismaClient {
     if (globalForPrisma.prisma) {
-        prismaInstance = globalForPrisma.prisma;
-    } else {
-        const connectionString = process.env.DATABASE_URL;
-        if (!connectionString) throw new Error("DATABASE_URL is not defined");
-        const pool = new Pool({ connectionString });
-        const adapter = new PrismaPg(pool);
-        prismaInstance = new PrismaClient({ adapter });
+        return globalForPrisma.prisma;
     }
-} catch (error) {
-    console.error("Failed to initialize Prisma Client:", error);
-    prismaInstance = new Proxy({} as PrismaClient, {
-        get(_target, prop) {
-            return () => { throw new Error(`Prisma Client failed to initialize: ${String(prop)}`); };
-        }
+
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+        throw new Error("DATABASE_URL is not defined");
+    }
+
+    // Reuse pool across hot-reloads to avoid exhausting Supabase pooler
+    if (!globalForPrisma.pool) {
+        globalForPrisma.pool = new Pool({
+            connectionString,
+            max: 3, // Small pool — Supabase pooler has strict limits
+            ssl: { rejectUnauthorized: false },
+        });
+    }
+
+    const adapter = new PrismaPg(globalForPrisma.pool, {
+        schema: "public",
     });
+    const client = new PrismaClient({ adapter });
+
+    if (process.env.NODE_ENV !== "production") {
+        globalForPrisma.prisma = client;
+    }
+
+    return client;
 }
 
-export const prisma = prismaInstance;
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export const prisma = createPrismaClient();
