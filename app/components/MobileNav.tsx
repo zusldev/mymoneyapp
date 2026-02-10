@@ -17,7 +17,7 @@ export function MobileNav() {
     return (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 safe-area-bottom">
             {/* Glassmorphism backdrop */}
-            <div className="bg-white/90 dark:bg-[#1a262d]/90 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-700/80 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+            <div className="glass-mobile-nav">
                 <div className="flex items-center justify-around px-2 py-1.5">
                     {MOBILE_NAV.map((item) => {
                         const isActive = pathname === item.href;
