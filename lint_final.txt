@@ -1,0 +1,30 @@
+
+> mymoneyapp@0.1.0 lint
+> eslint
+
+
+C:\Users\libor\Documents\mymoneyapp\app\metas\page.tsx
+  18:33  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\libor\Documents\mymoneyapp\app\metas\page.tsx:18:33
+  16 |
+  17 |     const fetch_ = () => { fetch("/api/goals").then(r => r.json()).then(setGoals).finally(() => setLoading(false)); };
+> 18 |     useEffect(() => { fetch_(); setNow(Date.now()); }, []);
+     |                                 ^^^^^^ Avoid calling setState() directly within an effect
+  19 |
+  20 |     const openCreate = () => { setEditing(null); setForm({ name: "", targetAmount: "", currentAmount: "0", deadline: new Date().toISOString().split("T")[0], priority: "medium", color: "#10b981" }); setModalOpen(true); };
+  21 |     const openEdit = (g: Goal) => { setEditing(g); setForm({ name: g.name, targetAmount: g.targetAmount.toString(), currentAmount: g.currentAmount.toString(), deadline: g.deadline.split("T")[0], priority: g.priority, color: g.color }); setModalOpen(true); };  react-hooks/set-state-in-effect
+
+C:\Users\libor\Documents\mymoneyapp\app\suscripciones\page.tsx
+   58:10  warning  'getNextOccurrences' is defined but never used                         @typescript-eslint/no-unused-vars
+   99:30  warning  'cc' is assigned a value but never used                                @typescript-eslint/no-unused-vars
+  130:9   warning  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+
+Γ£û 4 problems (1 error, 3 warnings)
+

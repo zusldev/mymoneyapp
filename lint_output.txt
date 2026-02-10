@@ -1,0 +1,96 @@
+
+> mymoneyapp@0.1.0 lint
+> eslint
+
+
+C:\Users\libor\Documents\mymoneyapp\app\asistente\page.tsx
+  28:40  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\Users\libor\Documents\mymoneyapp\app\asistente\page.tsx:28:40
+  26 |     const sendMessage = async (text: string) => {
+  27 |         if (!text.trim() || loading) return;
+> 28 |         const userMsg: Message = { id: Date.now().toString(), role: "user", content: text, createdAt: new Date().toISOString() };
+     |                                        ^^^^^^^^^^ Cannot call impure function
+  29 |         setMessages(prev => [...prev, userMsg]);
+  30 |         setInput("");
+  31 |         setLoading(true);                                                                                                                                                                                                                                                                                                                 react-hooks/purity
+  35:43  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\Users\libor\Documents\mymoneyapp\app\asistente\page.tsx:35:43
+  33 |             const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
+  34 |             const data = await res.json();
+> 35 |             const aiMsg: Message = { id: (Date.now() + 1).toString(), role: "assistant", content: data.message || data.error, createdAt: new Date().toISOString() };
+     |                                           ^^^^^^^^^^ Cannot call impure function
+  36 |             setMessages(prev => [...prev, aiMsg]);
+  37 |         } catch {
+  38 |             setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: "Error al conectar con el asistente.", createdAt: new Date().toISOString() }]);  react-hooks/purity
+
+C:\Users\libor\Documents\mymoneyapp\app\calendario\page.tsx
+    6:10  warning  'Modal' is defined but never used                  @typescript-eslint/no-unused-vars
+    7:10  warning  'CATEGORIES' is defined but never used             @typescript-eslint/no-unused-vars
+    7:22  warning  'CATEGORY_KEYS' is defined but never used          @typescript-eslint/no-unused-vars
+   70:12  warning  'modalOpen' is assigned a value but never used     @typescript-eslint/no-unused-vars
+   70:23  warning  'setModalOpen' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  291:72  error    Unexpected any. Specify a different type           @typescript-eslint/no-explicit-any
+  300:64  error    Unexpected any. Specify a different type           @typescript-eslint/no-explicit-any
+  322:66  error    Unexpected any. Specify a different type           @typescript-eslint/no-explicit-any
+  347:67  error    Unexpected any. Specify a different type           @typescript-eslint/no-explicit-any
+
+C:\Users\libor\Documents\mymoneyapp\app\components\Charts.tsx
+  131:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\libor\Documents\mymoneyapp\app\ingresos\page.tsx
+   75:12  warning  'creditCards' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  103:11  warning  'variableTotal' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  264:31  warning  'isDestCard' is assigned a value but never used     @typescript-eslint/no-unused-vars
+
+C:\Users\libor\Documents\mymoneyapp\app\metas\page.tsx
+  63:94  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\Users\libor\Documents\mymoneyapp\app\metas\page.tsx:63:94
+  61 |                     const remaining = g.targetAmount - g.currentAmount;
+  62 |                     const prio = priorityLabels[g.priority] || priorityLabels.medium;
+> 63 |                     const daysLeft = Math.max(0, Math.ceil((new Date(g.deadline).getTime() - Date.now()) / 86400000));
+     |                                                                                              ^^^^^^^^^^ Cannot call impure function
+  64 |
+  65 |                     return (
+  66 |                         <div key={g.id} className="bg-white dark:bg-[#1a262d] rounded-xl p-5 shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">  react-hooks/purity
+
+C:\Users\libor\Documents\mymoneyapp\app\page.tsx
+  169:17  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  186:59  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+C:\Users\libor\Documents\mymoneyapp\app\page.tsx:186:59
+  184 |   // Days until
+  185 |   const daysUntil = (dateStr: string) => {
+> 186 |     const diff = Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      |                                                           ^^^^^^^^^^ Cannot call impure function
+  187 |     if (diff <= 0) return "Hoy";
+  188 |     if (diff === 1) return "Ma├▒ana";
+  189 |     if (diff <= 7) return `En ${diff} d├¡as`;  react-hooks/purity
+
+C:\Users\libor\Documents\mymoneyapp\app\suscripciones\page.tsx
+   79:12  warning  'creditCards' is assigned a value but never used                       @typescript-eslint/no-unused-vars
+  113:11  warning  'yearlyTotal' is assigned a value but never used                       @typescript-eslint/no-unused-vars
+  125:11  warning  'upcoming' is assigned a value but never used                          @typescript-eslint/no-unused-vars
+  132:11  warning  'simSavingsYearly' is assigned a value but never used                  @typescript-eslint/no-unused-vars
+  135:9   warning  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+  183:11  warning  'cardEntries' is assigned a value but never used                       @typescript-eslint/no-unused-vars
+  202:11  warning  'toggle' is assigned a value but never used                            @typescript-eslint/no-unused-vars
+
+C:\Users\libor\Documents\mymoneyapp\app\transacciones\page.tsx
+  220:39  warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\libor\Documents\mymoneyapp\prisma\seed.ts
+  106:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Γ£û 27 problems (11 errors, 16 warnings)
+

@@ -17,6 +17,8 @@ model Account {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   transactions Transaction[]
+  incomes      Income[]
+  subscriptions Subscription[]
 
   @@map("accounts")
 }
@@ -35,6 +37,8 @@ model CreditCard {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   transactions Transaction[]
+  incomes      Income[]
+  subscriptions Subscription[]
 
   @@map("credit_cards")
 }
@@ -73,9 +77,15 @@ model Subscription {
   amount       Float
   frequency    String        @default("monthly")
   category     String        @default("suscripciones")
+  type         String        @default("entertainment")
   nextDate     DateTime      @map("next_date")
   active       Boolean       @default(true)
   color        String        @default("#f59e0b")
+  icon         String        @default("sync")
+  accountId    String?       @map("account_id")
+  account      Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  creditCardId String?       @map("credit_card_id")
+  creditCard   CreditCard?   @relation(fields: [creditCardId], references: [id], onDelete: SetNull)
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   transactions Transaction[]
@@ -84,15 +94,22 @@ model Subscription {
 }
 
 model Income {
-  id        String   @id @default(cuid())
-  name      String
-  amount    Float
-  frequency String   @default("monthly")
-  nextDate  DateTime @map("next_date")
-  source    String   @default("")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String      @id @default(cuid())
+  name         String
+  amount       Float
+  frequency    String      @default("monthly")
+  type         String      @default("fixed")
+  nextDate     DateTime    @map("next_date")
+  source       String      @default("")
+  active       Boolean     @default(true)
+  color        String      @default("#2badee")
+  icon         String      @default("payments")
+  accountId    String?     @map("account_id")
+  account      Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  creditCardId String?     @map("credit_card_id")
+  creditCard   CreditCard? @relation(fields: [creditCardId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
 
   @@map("incomes")
 }

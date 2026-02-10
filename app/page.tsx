@@ -1,24 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Wallet,
-  TrendingUp,
-  TrendingDown,
-  CreditCard,
-  AlertTriangle,
-  Target,
-  ArrowUpRight,
-  ArrowDownRight,
-  Repeat,
-  Sparkles,
-  Loader2,
-  PiggyBank,
-  CalendarClock,
-  ShieldAlert,
-} from "lucide-react";
 import { formatCurrency } from "./lib/financialEngine";
-import { DoughnutChart, BarChart } from "./components/Charts";
 import { CATEGORIES } from "./lib/categories";
 
 interface AnalysisData {
@@ -95,14 +78,33 @@ interface AnalysisData {
   }[];
 }
 
+// Subscription type for upcoming payments
+interface UpcomingSub {
+  id: string;
+  name: string;
+  amount: number;
+  category: string;
+  nextDate: string;
+  color: string;
+  active?: boolean;
+}
+
 export default function Dashboard() {
   const [data, setData] = useState<AnalysisData | null>(null);
+  const [subs, setSubs] = useState<UpcomingSub[]>([]);
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState<number>(0);
 
   useEffect(() => {
-    fetch("/api/analysis")
-      .then((res) => res.json())
-      .then(setData)
+    Promise.all([
+      fetch("/api/analysis").then((r) => r.json()),
+      fetch("/api/subscriptions").then((r) => r.json()),
+    ])
+      .then(([analysisData, subsData]) => {
+        setData(analysisData);
+        setSubs(Array.isArray(subsData) ? subsData : []);
+        setNow(Date.now());
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -111,8 +113,8 @@ export default function Dashboard() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 text-accent animate-spin" />
-          <p className="text-muted text-sm">Analizando tus finanzas...</p>
+          <div className="h-10 w-10 border-4 border-[#2badee]/30 border-t-[#2badee] rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">Analizando tus finanzas...</p>
         </div>
       </div>
     );
@@ -121,410 +123,322 @@ export default function Dashboard() {
   if (!data) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-muted">Error al cargar datos</p>
+        <p className="text-slate-500">Error al cargar datos</p>
       </div>
     );
   }
 
-  const monthNames = [
-    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-  ];
-  const currentMonth = monthNames[new Date().getMonth()];
+  // Compute health score (0-100) based on savings rate, debt ratio, goals progress
+  const savingsScore = Math.min(data.cashFlow.savingsRate * 2, 40); // max 40 pts
+  const debtScore = data.overview.totalBalance > 0
+    ? Math.max(0, 30 - (data.overview.totalDebt / data.overview.totalBalance) * 30)
+    : 15; // max 30 pts
+  const goalsScore = data.goals.length > 0
+    ? (data.goals.reduce((sum, g) => sum + g.progress, 0) / data.goals.length) * 0.3
+    : 15; // max 30 pts
+  const healthScore = Math.round(Math.min(savingsScore + debtScore + goalsScore, 100));
+  const healthLabel = healthScore >= 80 ? "Excelente" : healthScore >= 60 ? "Buena" : healthScore >= 40 ? "Regular" : "Necesita Atención";
+
+  // Budget data — income as limit, expenses as spent
+  const budgetLimit = data.cashFlow.totalIncome || 1;
+  const budgetSpent = data.cashFlow.totalExpenses;
+  const budgetPct = Math.min((budgetSpent / budgetLimit) * 100, 100);
+
+  // Top 3 categories for budget breakdown
+  const topCats = data.categoryBreakdown.slice(0, 3);
+
+  // Spending mix for donut — group into Needs/Wants/Savings
+  const needsCats = ["hogar", "supermercado", "servicios", "salud", "transporte"];
+  const wantsCats = ["comida", "entretenimiento", "compras", "viajes", "suscripciones"];
+  const totalExpenses = data.cashFlow.totalExpenses || 1;
+
+  const needsTotal = data.categoryBreakdown
+    .filter((c) => needsCats.includes(c.category))
+    .reduce((s, c) => s + c.total, 0);
+  const wantsTotal = data.categoryBreakdown
+    .filter((c) => wantsCats.includes(c.category))
+    .reduce((s, c) => s + c.total, 0);
+  const savingsTotal = Math.max(0, data.cashFlow.netBalance);
+
+  const needsPct = Math.round((needsTotal / (needsTotal + wantsTotal + savingsTotal || 1)) * 100);
+  const wantsPct = Math.round((wantsTotal / (needsTotal + wantsTotal + savingsTotal || 1)) * 100);
+  const savingsPct = 100 - needsPct - wantsPct;
+
+  // Savings change indicator
+  const savingsChange = data.cashFlow.savingsRate > 0 ? `+${data.cashFlow.savingsRate}%` : `${data.cashFlow.savingsRate}%`;
+
+  // Upcoming payments from subscriptions sorted by date
+  const upcomingPayments = [...subs]
+    .filter((s) => s.active !== false)
+    .sort((a, b) => new Date(a.nextDate).getTime() - new Date(b.nextDate).getTime())
+    .slice(0, 6);
+
+  // Category icons
+  const getCatIcon = (category: string) => {
+    const map: Record<string, string> = {
+      hogar: "home", comida: "restaurant", supermercado: "shopping_cart",
+      transporte: "directions_car", entretenimiento: "movie", salud: "fitness_center",
+      servicios: "bolt", compras: "shopping_bag", educacion: "school",
+      viajes: "flight", suscripciones: "sync", otros: "more_horiz",
+    };
+    return map[category] || "payments";
+  };
+
+  // Days until
+  const daysUntil = (dateStr: string) => {
+    if (!now) return "";
+    const diff = Math.ceil((new Date(dateStr).getTime() - now) / (1000 * 60 * 60 * 24));
+    if (diff <= 0) return "Hoy";
+    if (diff === 1) return "Mañana";
+    if (diff <= 7) return `En ${diff} días`;
+    return new Date(dateStr).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+  };
 
   return (
-    <div className="space-y-6 stagger-children">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-            Hola 👋
-          </h1>
-          <p className="text-muted mt-1">
-            Resumen financiero de <span className="text-accent font-medium">{currentMonth}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-2 glass-card rounded-xl">
-          <Sparkles className="w-4 h-4 text-amber" />
-          <span className="text-sm text-muted-light">
-            {data.anomalies.length > 0
-              ? `${data.anomalies.length} alerta${data.anomalies.length > 1 ? "s" : ""}`
-              : "Todo en orden"}
-          </span>
-        </div>
-      </div>
+    <div className="space-y-8 stagger-children">
+      {/* ═══ Top Row: Hero Card & Key Metrics ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Glassmorphic Hero Card: Health Score */}
+        <div className="lg:col-span-8 glass-panel rounded-2xl p-8 relative overflow-hidden shadow-soft flex flex-col md:flex-row items-center justify-between gap-8 group">
+          {/* Decorative blob */}
+          <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#2badee]/10 rounded-full blur-3xl group-hover:bg-[#2badee]/20 transition-all duration-500" />
 
-      {/* Main Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Balance Total"
-          value={formatCurrency(data.overview.totalBalance)}
-          icon={<Wallet className="w-5 h-5" />}
-          color="cyan"
-          subtitle={`${data.overview.accountCount} cuenta${data.overview.accountCount !== 1 ? "s" : ""}`}
-        />
-        <StatCard
-          label="Ingresos del Mes"
-          value={formatCurrency(data.cashFlow.totalIncome)}
-          icon={<TrendingUp className="w-5 h-5" />}
-          color="green"
-          subtitle={data.cashFlow.savingsRate > 0 ? `${data.cashFlow.savingsRate}% ahorro` : ""}
-        />
-        <StatCard
-          label="Gastos del Mes"
-          value={formatCurrency(data.cashFlow.totalExpenses)}
-          icon={<TrendingDown className="w-5 h-5" />}
-          color="rose"
-          subtitle={`${formatCurrency(data.projection.dailyBurnRate)}/día`}
-        />
-        <StatCard
-          label="Deuda Total"
-          value={formatCurrency(data.overview.totalDebt)}
-          icon={<CreditCard className="w-5 h-5" />}
-          color="purple"
-          subtitle={`${data.overview.cardCount} tarjeta${data.overview.cardCount !== 1 ? "s" : ""}`}
-        />
-      </div>
-
-      {/* Net Worth Banner */}
-      <div className={`glass-card rounded-2xl p-6 ${data.overview.netWorth >= 0 ? "glow-cyan" : "glow-rose"}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted mb-1">Patrimonio Neto</p>
-            <p className={`text-3xl font-bold tabular-nums ${data.overview.netWorth >= 0 ? "text-cyan" : "text-rose"}`}>
-              {formatCurrency(data.overview.netWorth)}
+          <div className="relative z-10 flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#2badee]/10 text-[#2badee] text-xs font-bold uppercase tracking-wider">
+                AI Analysis
+              </span>
+              <span className="text-xs text-slate-400">Actualizado ahora</span>
+            </div>
+            <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">
+              Salud {healthLabel}
+            </h2>
+            <p className="text-slate-500 dark:text-slate-300 mb-6 max-w-md">
+              {data.cashFlow.savingsRate > 0 ? (
+                <>Tus hábitos financieros se ven muy bien. Has reducido gastos discrecionales en <span className="text-[#34d399] font-medium">{data.cashFlow.savingsRate}%</span> comparado con tus ingresos.</>
+              ) : (
+                <>Tus gastos superan tus ingresos este mes. Revisa tus categorías de gasto para encontrar oportunidades de ahorro.</>
+              )}
             </p>
+            <div className="flex gap-3">
+              <button className="btn-primary">Ver Reporte Completo</button>
+              <button className="btn-secondary">Editar Metas</button>
+            </div>
           </div>
-          <div className={`p-3 rounded-xl ${data.overview.netWorth >= 0 ? "bg-cyan-glow" : "bg-rose-glow"}`}>
-            <PiggyBank className={`w-8 h-8 ${data.overview.netWorth >= 0 ? "text-cyan" : "text-rose"}`} />
+
+          {/* Score Gauge */}
+          <div className="relative w-40 h-40 flex-shrink-0 control-pulse">
+            <div className="absolute inset-0 rounded-full border-8 border-slate-100 dark:border-slate-700/50" />
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: `conic-gradient(#2badee, #34d399 ${healthScore}%, transparent ${healthScore}%)`,
+                mask: "radial-gradient(transparent 62%, black 63%)",
+                WebkitMask: "radial-gradient(transparent 62%, black 63%)",
+              }}
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl font-bold text-slate-800 dark:text-white">{healthScore}</span>
+              <span className="text-xs text-slate-400 font-medium uppercase mt-1">Score</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Category Breakdown */}
-        <div className="glass-card rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Gastos por Categoría</h3>
-          {data.categoryBreakdown.length > 0 ? (
-            <div className="flex flex-col md:flex-row items-center gap-6">
-              <div className="chart-container-square">
-                <DoughnutChart data={data.categoryBreakdown} />
+        {/* Right Column: Balance & Savings */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          {/* Balance Card */}
+          <div className="bg-white dark:bg-[#1a262d] p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex-1 flex flex-col justify-center">
+            <div className="flex justify-between items-start mb-2">
+              <div className="p-2 bg-[#e0f2fe] dark:bg-[#2badee]/20 rounded-lg text-[#2badee]">
+                <span className="material-icons-round text-xl">account_balance</span>
               </div>
-              <div className="flex-1 space-y-2 w-full">
-                {data.categoryBreakdown.slice(0, 5).map((cat) => (
-                  <div key={cat.category} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                      <span className="text-muted-light">{cat.label}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-foreground font-medium tabular-nums">{formatCurrency(cat.total)}</span>
-                      <span className="text-muted text-xs w-10 text-right">{cat.percentage}%</span>
-                    </div>
-                  </div>
-                ))}
+              <span className={`text-xs font-medium px-2 py-1 rounded ${data.cashFlow.savingsRate >= 0
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                }`}>
+                {savingsChange}
+              </span>
+            </div>
+            <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Balance Total</span>
+            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1 tabular-nums">
+              {formatCurrency(data.overview.totalBalance)}
+            </h3>
+          </div>
+
+          {/* Est Savings Card */}
+          <div className="bg-white dark:bg-[#1a262d] p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex-1 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute right-0 bottom-0 opacity-10 text-[#2badee] pointer-events-none transform translate-x-2 translate-y-2">
+              <span className="material-icons-round text-8xl">trending_up</span>
+            </div>
+            <div className="flex justify-between items-start mb-2">
+              <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-500">
+                <span className="material-icons-round text-xl">savings</span>
               </div>
             </div>
-          ) : (
-            <p className="text-muted text-sm text-center py-8">Agrega transacciones para ver el análisis</p>
-          )}
+            <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Ahorro Est. (Mes)</span>
+            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1 tabular-nums">
+              {data.cashFlow.netBalance >= 0 ? "+" : ""}{formatCurrency(data.cashFlow.netBalance)}
+            </h3>
+            <p className="text-xs text-slate-400 mt-2">Basado en la trayectoria actual</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ Middle Row: Budget & Spending Mix ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Monthly Budget (2 cols) */}
+        <div className="lg:col-span-2 bg-white dark:bg-[#1a262d] rounded-xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Presupuesto Mensual</h3>
+              <p className="text-sm text-slate-500">Has gastado {budgetPct.toFixed(0)}% de tus ingresos</p>
+            </div>
+            <button className="p-2 text-slate-400 hover:text-[#2badee] transition-colors">
+              <span className="material-icons-round">more_horiz</span>
+            </button>
+          </div>
+
+          {/* Main Budget Bar */}
+          <div className="mb-8">
+            <div className="flex justify-between text-sm font-medium mb-2">
+              <span className="text-slate-700 dark:text-slate-200">{formatCurrency(budgetSpent)} Gastado</span>
+              <span className="text-slate-500">{formatCurrency(budgetLimit)} Ingreso</span>
+            </div>
+            <div className="h-4 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#2badee] rounded-full transition-all duration-1000"
+                style={{ width: `${budgetPct}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Categories breakdown */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {topCats.map((cat) => (
+              <div key={cat.category} className="p-4 rounded-lg bg-[#f6f7f8] dark:bg-[#101c22] border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                  <span className="text-xs font-semibold text-slate-500 uppercase">{cat.label}</span>
+                </div>
+                <div className="text-lg font-bold text-slate-800 dark:text-white tabular-nums">
+                  {formatCurrency(cat.total)}
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-2">
+                  <div
+                    className="h-1.5 rounded-full transition-all duration-1000"
+                    style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Cash Flow Bar */}
-        <div className="glass-card rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Flujo de Efectivo</h3>
-          {data.cashFlow.totalIncome > 0 || data.cashFlow.totalExpenses > 0 ? (
-            <div>
-              <BarChart income={data.cashFlow.totalIncome} expenses={data.cashFlow.totalExpenses} />
-              <div className="mt-4 flex items-center justify-between text-sm">
-                <span className="text-muted">Balance neto</span>
-                <span className={`font-semibold tabular-nums ${data.cashFlow.isDeficit ? "text-rose" : "text-cyan"}`}>
-                  {data.cashFlow.isDeficit ? "" : "+"}{formatCurrency(data.cashFlow.netBalance)}
+        {/* Donut Chart — Spending Mix */}
+        <div className="lg:col-span-1 bg-white dark:bg-[#1a262d] rounded-xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Mix de Gastos</h3>
+          <div className="flex-1 flex items-center justify-center relative">
+            {/* CSS Donut Chart */}
+            <div
+              className="relative w-48 h-48 rounded-full"
+              style={{
+                background: `conic-gradient(#3b82f6 0% ${needsPct}%, #a855f7 ${needsPct}% ${needsPct + wantsPct}%, #fbbf24 ${needsPct + wantsPct}% ${needsPct + wantsPct + savingsPct}%, #cbd5e1 ${needsPct + wantsPct + savingsPct}% 100%)`,
+              }}
+            >
+              <div className="absolute inset-4 bg-white dark:bg-[#1a262d] rounded-full flex items-center justify-center flex-col shadow-inner">
+                <span className="text-xs text-slate-400 font-medium uppercase">Total</span>
+                <span className="text-xl font-bold text-slate-800 dark:text-white tabular-nums">
+                  {formatCurrency(totalExpenses)}
                 </span>
               </div>
             </div>
-          ) : (
-            <p className="text-muted text-sm text-center py-8">Sin movimientos este mes</p>
-          )}
-        </div>
-      </div>
-
-      {/* Credit Cards & Projection Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Credit Cards */}
-        <div className="glass-card rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-purple" />
-            Tarjetas de Crédito
-          </h3>
-          {data.creditCards.length > 0 ? (
-            <div className="space-y-4">
-              {data.creditCards.map((card) => (
-                <div key={card.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">{card.name}</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${card.riskLevel === "bajo" ? "bg-green-500/10 text-green-400" :
-                        card.riskLevel === "medio" ? "bg-amber/10 text-amber" :
-                          card.riskLevel === "alto" ? "bg-orange-500/10 text-orange-400" :
-                            "bg-rose/10 text-rose"
-                      }`}>
-                      {card.utilization.toFixed(0)}% usado
-                    </span>
-                  </div>
-                  <div className="progress-bar">
-                    <div
-                      className="progress-bar-fill"
-                      style={{
-                        width: `${Math.min(card.utilization, 100)}%`,
-                        background: card.utilization <= 30 ? "#06d6a0" :
-                          card.utilization <= 50 ? "#fbbf24" :
-                            card.utilization <= 75 ? "#f97316" : "#ef4444",
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted">{card.impactDescription}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted text-sm text-center py-8">No hay tarjetas registradas</p>
-          )}
-        </div>
-
-        {/* Monthly Projection */}
-        <div className="glass-card rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <CalendarClock className="w-5 h-5 text-accent" />
-            Proyección del Mes
-          </h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Balance proyectado al cierre</span>
-              <span className={`text-lg font-bold tabular-nums ${data.projection.projectedBalance >= 0 ? "text-cyan" : "text-rose"}`}>
-                {formatCurrency(data.projection.projectedBalance)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Días de liquidez</span>
-              <span className="text-lg font-bold text-foreground tabular-nums">
-                {data.projection.liquidityDays > 365 ? "∞" : data.projection.liquidityDays}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Gasto diario promedio</span>
-              <span className="text-sm font-medium text-foreground tabular-nums">
-                {formatCurrency(data.projection.dailyBurnRate)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Días restantes</span>
-              <span className="text-sm font-medium text-foreground tabular-nums">
-                {data.projection.daysRemaining}
-              </span>
-            </div>
-            {data.projection.overdraftRisk && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose/10 border border-rose/20">
-                <ShieldAlert className="w-5 h-5 text-rose shrink-0" />
-                <span className="text-sm text-rose">Riesgo de sobregiro detectado</span>
+          </div>
+          <div className="mt-6 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500" />
+                <span className="text-slate-600 dark:text-slate-300">Necesidades</span>
               </div>
-            )}
+              <span className="font-medium">{needsPct}%</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-purple-500" />
+                <span className="text-slate-600 dark:text-slate-300">Deseos</span>
+              </div>
+              <span className="font-medium">{wantsPct}%</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-amber-400" />
+                <span className="text-slate-600 dark:text-slate-300">Ahorro</span>
+              </div>
+              <span className="font-medium">{savingsPct}%</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Goals & Subscriptions Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Financial Goals */}
-        <div className="glass-card rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Target className="w-5 h-5 text-cyan" />
-            Metas Financieras
-          </h3>
-          {data.goals.length > 0 ? (
-            <div className="space-y-4">
-              {data.goals.map((goal) => (
-                <div key={goal.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">{goal.name}</span>
-                    <span className="text-xs text-muted">{goal.progress.toFixed(0)}%</span>
-                  </div>
-                  <div className="progress-bar">
-                    <div
-                      className="progress-bar-fill"
-                      style={{
-                        width: `${Math.min(goal.progress, 100)}%`,
-                        background: goal.color,
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-muted">
-                    <span>{formatCurrency(goal.currentAmount)}</span>
-                    <span>{formatCurrency(goal.targetAmount)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted text-sm text-center py-8">Define metas para rastrear tu progreso</p>
-          )}
-        </div>
-
-        {/* Subscriptions Summary */}
-        <div className="glass-card rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Repeat className="w-5 h-5 text-amber" />
-            Suscripciones
-          </h3>
+      {/* ═══ Bottom Row: Upcoming Payments ═══ */}
+      {upcomingPayments.length > 0 && (
+        <div>
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-2xl font-bold text-foreground tabular-nums">
-                {formatCurrency(data.subscriptions.monthlyTotal)}
-              </p>
-              <p className="text-xs text-muted">costo mensual total</p>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-semibold text-foreground">{data.subscriptions.count}</p>
-              <p className="text-xs text-muted">activas</p>
-            </div>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Próximos Pagos</h3>
+            <a className="text-sm text-[#2badee] hover:text-[#1a8cb5] font-medium" href="/suscripciones">
+              Ver Calendario
+            </a>
           </div>
-          {data.subscriptions.monthlyTotal > 0 && (
-            <div className="p-3 rounded-xl bg-amber-glow border border-amber/10">
-              <p className="text-xs text-amber">
-                💡 Esto representa {formatCurrency(data.subscriptions.monthlyTotal * 12)} al año
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Anomalies & Recommendations */}
-      {(data.anomalies.length > 0 || data.recommendations.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Anomalies */}
-          {data.anomalies.length > 0 && (
-            <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber" />
-                Alertas
-              </h3>
-              <div className="space-y-3">
-                {data.anomalies.map((anomaly, i) => (
-                  <div
-                    key={i}
-                    className={`p-3 rounded-xl border ${anomaly.severity === "danger" ? "bg-rose/5 border-rose/20" :
-                        anomaly.severity === "warning" ? "bg-amber/5 border-amber/20" :
-                          "bg-accent/5 border-accent/20"
-                      }`}
-                  >
-                    <p className={`text-sm ${anomaly.severity === "danger" ? "text-rose" :
-                        anomaly.severity === "warning" ? "text-amber" :
-                          "text-accent"
-                      }`}>
-                      {anomaly.description}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Horizontal Scroller */}
+          <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 snap-x">
+            {upcomingPayments.map((sub) => {
+              const catIcon = getCatIcon(sub.category);
+              const daysLabel = daysUntil(sub.nextDate);
+              const isUrgent = daysLabel === "Hoy" || daysLabel === "Mañana";
+              const catInfo = CATEGORIES[sub.category as keyof typeof CATEGORIES] || CATEGORIES.otros;
 
-          {/* Recommendations */}
-          {data.recommendations.length > 0 && (
-            <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-accent" />
-                Recomendaciones
-              </h3>
-              <div className="space-y-3">
-                {data.recommendations.slice(0, 4).map((rec, i) => (
-                  <div key={i} className="p-3 rounded-xl bg-surface-hover border border-border">
-                    <p className="text-sm font-medium text-foreground">{rec.title}</p>
-                    <p className="text-xs text-muted mt-1">{rec.description}</p>
-                    <p className="text-xs text-accent mt-1">💡 {rec.impact}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Recent Transactions */}
-      <div className="glass-card rounded-2xl p-6">
-        <h3 className="text-lg font-semibold text-foreground mb-4">Últimas Transacciones</h3>
-        {data.recentTransactions.length > 0 ? (
-          <div className="space-y-2">
-            {data.recentTransactions.map((tx) => {
-              const catInfo = CATEGORIES[tx.category as keyof typeof CATEGORIES] || CATEGORIES.otros;
               return (
-                <div key={tx.id} className="flex items-center justify-between py-3 border-b border-border/30 last:border-0">
-                  <div className="flex items-center gap-3">
+                <div
+                  key={sub.id}
+                  className="snap-start min-w-[280px] bg-white dark:bg-[#1a262d] p-5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-[#2badee]/30 transition-colors group cursor-pointer"
+                >
+                  <div className="flex justify-between items-start mb-4">
                     <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-sm"
+                      className="w-10 h-10 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"
                       style={{ backgroundColor: catInfo.color + "15", color: catInfo.color }}
                     >
-                      {tx.type === "income" ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                      <span className="material-icons-round">{catIcon}</span>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {tx.merchant || catInfo.label}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {new Date(tx.date).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}
-                      </p>
-                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded ${isUrgent
+                      ? "text-[#2badee] bg-[#2badee]/10"
+                      : "text-slate-400 bg-slate-100 dark:bg-slate-800"
+                      }`}>
+                      {daysLabel}
+                    </span>
                   </div>
-                  <span className={`text-sm font-semibold tabular-nums ${tx.type === "income" ? "text-cyan" : "text-foreground"}`}>
-                    {tx.type === "income" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
-                  </span>
+                  <h4 className="font-bold text-slate-800 dark:text-white">{sub.name}</h4>
+                  <div className="flex justify-between items-center mt-2">
+                    <p className="text-sm text-slate-500">{catInfo.label}</p>
+                    <span className="font-bold text-slate-800 dark:text-white tabular-nums">
+                      {formatCurrency(sub.amount)}
+                    </span>
+                  </div>
                 </div>
               );
             })}
+
+            {/* Add New Button */}
+            <div className="snap-start min-w-[100px] flex items-center justify-center">
+              <a
+                href="/suscripciones"
+                className="h-12 w-12 rounded-full border-2 border-dashed border-slate-300 hover:border-[#2badee] text-slate-400 hover:text-[#2badee] transition-colors flex items-center justify-center"
+              >
+                <span className="material-icons-round">add</span>
+              </a>
+            </div>
           </div>
-        ) : (
-          <p className="text-muted text-sm text-center py-8">
-            Aún no hay transacciones. ¡Agrega tu primera transacción para empezar!
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Stat Card Component ───
-function StatCard({
-  label,
-  value,
-  icon,
-  color,
-  subtitle,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  color: "cyan" | "green" | "rose" | "purple" | "amber";
-  subtitle?: string;
-}) {
-  const colorMap = {
-    cyan: { bg: "bg-cyan-glow", text: "text-cyan", glow: "glow-cyan" },
-    green: { bg: "bg-green-500/10", text: "text-green-400", glow: "" },
-    rose: { bg: "bg-rose-glow", text: "text-rose", glow: "glow-rose" },
-    purple: { bg: "bg-purple-glow", text: "text-purple", glow: "glow-purple" },
-    amber: { bg: "bg-amber-glow", text: "text-amber", glow: "glow-amber" },
-  };
-  const c = colorMap[color];
-
-  return (
-    <div className={`glass-card rounded-2xl p-5 ${c.glow}`}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-muted">{label}</span>
-        <div className={`p-2 rounded-lg ${c.bg}`}>
-          <div className={c.text}>{icon}</div>
         </div>
-      </div>
-      <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
-      {subtitle && <p className="text-xs text-muted mt-1">{subtitle}</p>}
+      )}
     </div>
   );
 }

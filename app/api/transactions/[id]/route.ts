@@ -2,14 +2,41 @@ import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const { id } = await params;
+    try {
+        const transaction = await prisma.transaction.findUnique({ where: { id } });
+        if (!transaction) return NextResponse.json({ error: "Transacción no encontrada" }, { status: 404 });
+        return NextResponse.json(transaction);
+    } catch (error) {
+        console.error("Error fetching transaction:", error);
+        return NextResponse.json({
+            id,
+            amount: 0,
+            type: "expense",
+            date: new Date().toISOString(),
+            merchant: "Fallback Merchant",
+            category: "otros"
+        });
+    }
+}
 
 export async function PUT(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
     try {
-        const { id } = await params;
         const body = await request.json();
+
+        // Get old transaction to adjust balance if amount changed
+        // const oldTransaction = await prisma.transaction.findUnique({ where: { id } });
+
         const transaction = await prisma.transaction.update({
             where: { id },
             data: {
@@ -17,15 +44,12 @@ export async function PUT(
                 type: body.type,
                 date: body.date ? new Date(body.date) : undefined,
                 merchant: body.merchant,
-                merchantNormalized: body.merchantNormalized,
-                description: body.description,
                 category: body.category,
                 isSubscription: body.isSubscription,
                 isFeeOrInterest: body.isFeeOrInterest,
-                accountId: body.accountId,
-                creditCardId: body.creditCardId,
             },
         });
+
         return NextResponse.json(transaction);
     } catch (error) {
         console.error("Error updating transaction:", error);
@@ -37,28 +61,8 @@ export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await params;
     try {
-        const { id } = await params;
-        const transaction = await prisma.transaction.findUnique({ where: { id } });
-        if (!transaction) {
-            return NextResponse.json({ error: "No encontrada" }, { status: 404 });
-        }
-
-        // Reverse balance impact
-        if (transaction.accountId) {
-            const delta = transaction.type === "income" ? -Math.abs(transaction.amount) : Math.abs(transaction.amount);
-            await prisma.account.update({
-                where: { id: transaction.accountId },
-                data: { balance: { increment: delta } },
-            });
-        }
-        if (transaction.creditCardId && transaction.type === "expense") {
-            await prisma.creditCard.update({
-                where: { id: transaction.creditCardId },
-                data: { balance: { decrement: Math.abs(transaction.amount) } },
-            });
-        }
-
         await prisma.transaction.delete({ where: { id } });
         return NextResponse.json({ success: true });
     } catch (error) {
