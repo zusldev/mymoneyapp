@@ -21,3 +21,35 @@ export const CATEGORIES = {
 export type CategoryKey = keyof typeof CATEGORIES;
 
 export const CATEGORY_KEYS = Object.keys(CATEGORIES) as CategoryKey[];
+
+/* ═══ Tailwind color maps for UI rendering ═══ */
+export const CAT_COLORS: Record<string, { bg: string; text: string }> = {
+    comida: { bg: "bg-orange-50 dark:bg-orange-900/20", text: "text-orange-500" },
+    supermercado: { bg: "bg-green-50 dark:bg-green-900/20", text: "text-green-600" },
+    transporte: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600" },
+    entretenimiento: { bg: "bg-purple-50 dark:bg-purple-900/20", text: "text-purple-500" },
+    servicios: { bg: "bg-blue-50 dark:bg-blue-900/20", text: "text-blue-500" },
+    hogar: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-500" },
+    renta: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-500" },
+    salud: { bg: "bg-pink-50 dark:bg-pink-900/20", text: "text-pink-500" },
+    compras: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600" },
+    educacion: { bg: "bg-teal-50 dark:bg-teal-900/20", text: "text-teal-500" },
+    suscripciones: { bg: "bg-violet-50 dark:bg-violet-900/20", text: "text-violet-500" },
+    ingresos: { bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-600" },
+    salario: { bg: "bg-[#2badee]/10", text: "text-[#2badee]" },
+    viajes: { bg: "bg-sky-50 dark:bg-sky-900/20", text: "text-sky-500" },
+    transferencias: { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-500" },
+    comisiones_intereses: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-500" },
+};
+
+export const DEFAULT_CAT_COLORS = { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-500" };
+
+/** Resolve icon for a category key. Falls back to "receipt_long". */
+export function getCatIcon(cat: string): string {
+    return (CATEGORIES[cat as CategoryKey]?.icon) || "receipt_long";
+}
+
+/** Resolve Tailwind color classes for a category key. */
+export function getCatColors(cat: string): { bg: string; text: string } {
+    return CAT_COLORS[cat] || DEFAULT_CAT_COLORS;
+}
