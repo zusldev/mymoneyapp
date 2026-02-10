@@ -2,16 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
-
-/* ═══ Types ═══ */
-interface MiniTx { id: string; merchant: string; amount: number; type: string; date: string; category: string; }
-interface MiniSub { id: string; name: string; amount: number; frequency: string; icon: string; }
-interface MiniIncome { id: string; name: string; amount: number; frequency: string; icon: string; }
-interface Account {
-    id: string; name: string; type: string; balance: number; currency: string; color: string; icon: string;
-    _count?: { transactions: number };
-    subscriptions?: MiniSub[]; incomes?: MiniIncome[]; transactions?: MiniTx[];
-}
+import type { AccountFull as Account } from "../lib/types";
 
 /* ═══ Constants ═══ */
 const T = { 300: "#5eead4", 400: "#2dd4bf", 500: "#14b8a6", 600: "#0d9488", 700: "#0f766e" };
@@ -42,7 +33,7 @@ function AccountCard({ account, total, index, onEdit, onDelete }: {
     account: Account; total: number; index: number;
     onEdit: (a: Account) => void; onDelete: (id: string) => void;
 }) {
-    const pct = total > 0 ? (account.balance / total) * 100 : 0;
+    const pct = total > 0 ? Math.max(0, (account.balance / total) * 100) : 0;
     const icon = typeIcons[account.type] || "account_balance_wallet";
     const lastTx = account.transactions?.[0];
     const subCount = account.subscriptions?.length || 0;
@@ -230,8 +221,8 @@ export default function CuentasPage() {
                 {accounts.length > 0 && (
                     <div className="mt-6">
                         <div className="flex h-2 rounded-full overflow-hidden gap-px">
-                            {accounts.sort((a, b) => b.balance - a.balance).map((a, i) => {
-                                const pct = totalBalance > 0 ? (a.balance / totalBalance) * 100 : 0;
+                            {[...accounts].sort((a, b) => b.balance - a.balance).map((a, i) => {
+                                const pct = totalBalance > 0 ? Math.max(0, (a.balance / totalBalance) * 100) : 0;
                                 return (
                                     <div key={a.id}
                                         className="rounded-full transition-all duration-1000 ease-out relative group/seg"
@@ -251,7 +242,7 @@ export default function CuentasPage() {
                         </div>
                         {/* Legend */}
                         <div className="flex flex-wrap gap-3 mt-3">
-                            {accounts.sort((a, b) => b.balance - a.balance).map((a, i) => (
+                            {[...accounts].sort((a, b) => b.balance - a.balance).map((a, i) => (
                                 <div key={a.id} className="flex items-center gap-1.5">
                                     <div className="w-2 h-2 rounded-full" style={{ background: `hsl(${170 + i * 28}, 55%, ${58 - i * 4}%)` }} />
                                     <span className="text-[10px] text-slate-500 dark:text-slate-400">{a.name}</span>
@@ -293,7 +284,7 @@ export default function CuentasPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {accounts.sort((a, b) => b.balance - a.balance).map((account, idx) => (
+                        {[...accounts].sort((a, b) => b.balance - a.balance).map((account, idx) => (
                             <AccountCard key={account.id} account={account} total={totalBalance} index={idx} onEdit={openEdit} onDelete={handleDelete} />
                         ))}
                     </div>

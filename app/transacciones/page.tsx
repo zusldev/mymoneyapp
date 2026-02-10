@@ -1,49 +1,9 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
-import { CATEGORIES, CATEGORY_KEYS, CategoryKey } from "../lib/categories";
-
-/* ═══ Types ═══ */
-interface Transaction {
-    id: string; amount: number; type: string; date: string;
-    merchant: string; merchantNormalized: string; description: string;
-    category: string; isSubscription: boolean; isFeeOrInterest: boolean;
-    account?: { name: string; color: string } | null;
-    creditCard?: { name: string; color: string; lastFour?: string } | null;
-}
-
-interface Account { id: string; name: string; color: string; icon: string; }
-interface CreditCard { id: string; name: string; color: string; lastFour: string; }
-
-/* ═══ Const Maps ═══ */
-const CAT_ICONS: Record<string, string> = {
-    comida: "restaurant", supermercado: "shopping_cart", transporte: "directions_car",
-    entretenimiento: "movie", servicios: "bolt", hogar: "home", renta: "home",
-    salud: "fitness_center", compras: "shopping_bag", educacion: "school",
-    suscripciones: "sync", ingresos: "trending_up", salario: "payments",
-    viajes: "flight", transferencias: "swap_horiz", comisiones_intereses: "warning",
-    otros: "receipt_long",
-};
-const CAT_COLORS: Record<string, { bg: string; text: string }> = {
-    comida: { bg: "bg-orange-50 dark:bg-orange-900/20", text: "text-orange-500" },
-    supermercado: { bg: "bg-green-50 dark:bg-green-900/20", text: "text-green-600" },
-    transporte: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600" },
-    entretenimiento: { bg: "bg-purple-50 dark:bg-purple-900/20", text: "text-purple-500" },
-    servicios: { bg: "bg-blue-50 dark:bg-blue-900/20", text: "text-blue-500" },
-    hogar: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-500" },
-    renta: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-500" },
-    salud: { bg: "bg-pink-50 dark:bg-pink-900/20", text: "text-pink-500" },
-    compras: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600" },
-    educacion: { bg: "bg-teal-50 dark:bg-teal-900/20", text: "text-teal-500" },
-    suscripciones: { bg: "bg-violet-50 dark:bg-violet-900/20", text: "text-violet-500" },
-    ingresos: { bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-600" },
-    salario: { bg: "bg-[#2badee]/10", text: "text-[#2badee]" },
-    viajes: { bg: "bg-sky-50 dark:bg-sky-900/20", text: "text-sky-500" },
-    transferencias: { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-500" },
-    comisiones_intereses: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-500" },
-};
-const DEFAULT_CAT = { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-500" };
+import { CATEGORIES, CATEGORY_KEYS, CategoryKey, getCatIcon, getCatColors } from "../lib/categories";
+import type { Transaction, Account, CreditCard, TransactionAnomaly as Anomaly } from "../lib/types";
 
 /* ═══ TransactionItem Component ═══ */
 function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategory }: {
@@ -51,14 +11,27 @@ function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategor
     onUpdateCategory: (id: string, cat: string) => void;
 }) {
     const [showCatPicker, setShowCatPicker] = useState(false);
+    const catPickerRef = useRef<HTMLDivElement>(null);
     const cat = CATEGORIES[tx.category as CategoryKey] || CATEGORIES.otros;
-    const colors = CAT_COLORS[tx.category] || DEFAULT_CAT;
-    const icon = CAT_ICONS[tx.category] || "receipt_long";
+    const colors = getCatColors(tx.category);
+    const icon = getCatIcon(tx.category);
     const isIncome = tx.type === "income";
 
+    // Click-outside dismiss for category picker
+    useEffect(() => {
+        if (!showCatPicker) return;
+        const handler = (e: MouseEvent) => {
+            if (catPickerRef.current && !catPickerRef.current.contains(e.target as Node)) {
+                setShowCatPicker(false);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [showCatPicker]);
+
     return (
-        <div className={`group bg-white dark:bg-[#1a262d] rounded-xl p-4 flex items-center gap-4 shadow-sm border transition-all hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700
-            ${txAnomalies ? "border-amber-200 dark:border-amber-800/40" : "border-slate-100 dark:border-slate-800/50"}`}>
+        <div className={`group rounded-lg p-4 flex items-center gap-4 transition-all hover:bg-white dark:hover:bg-[#1a262d] hover:shadow-sm border-l-2
+            ${txAnomalies ? "border-l-amber-400 bg-amber-50/30 dark:bg-amber-900/5" : "border-l-transparent bg-slate-50/40 dark:bg-white/[0.02] hover:border-l-slate-300 dark:hover:border-l-slate-600"}`}>
             {/* Category icon */}
             <div className={`w-11 h-11 rounded-xl ${colors.bg} ${colors.text} flex items-center justify-center shrink-0`}>
                 <span className="material-icons-round text-xl">{icon}</span>
@@ -78,7 +51,7 @@ function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategor
                     <span>{new Date(tx.date).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</span>
                     <span className="w-0.5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600" />
                     {/* Clickable category */}
-                    <div className="relative">
+                    <div className="relative" ref={catPickerRef}>
                         <button onClick={() => setShowCatPicker(!showCatPicker)} className="hover:text-[#2badee] transition-colors flex items-center gap-0.5">
                             {cat.label}
                             <span className="material-icons-round text-[10px] opacity-0 group-hover:opacity-100">edit</span>
@@ -143,8 +116,6 @@ function formatDateLabel(ds: string) {
     return d.toLocaleDateString("es-MX", { weekday: "short", month: "short", day: "numeric" });
 }
 
-interface Anomaly { txId: string; type: string; label: string; severity: "info" | "warn" | "danger" }
-
 function detectAnomalies(txs: Transaction[]): Anomaly[] {
     const a: Anomaly[] = [];
     const expenses = txs.filter(t => t.type === "expense");
@@ -199,7 +170,7 @@ export default function TransaccionesPage() {
     });
 
     /* ── Fetch ── */
-    const fetchData = useMemo(() => async () => {
+    const fetchData = useCallback(async () => {
         try {
             const p = new URLSearchParams();
             if (filterCategory) p.set("category", filterCategory);
@@ -245,7 +216,7 @@ export default function TransaccionesPage() {
     const totalIncome = filtered.filter(t => t.type === "income").reduce((s, t) => s + Math.abs(t.amount), 0);
     const totalExpenses = filtered.filter(t => t.type === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
     const netBalance = totalIncome - totalExpenses;
-    const spentPct = totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0;
+    const spentPct = totalIncome > 0 ? Math.min(Math.round((totalExpenses / totalIncome) * 100), 100) : 0;
 
     /* Category breakdown */
     const catBreakdown = useMemo(() => {
@@ -294,6 +265,13 @@ export default function TransaccionesPage() {
 
     return (
         <div className="max-w-6xl mx-auto space-y-6">
+            {/* ═══ Slate ambient — Transactions identity ═══ */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+                <div className="absolute -top-20 right-10 w-[420px] h-[420px] rounded-full opacity-[0.04]"
+                    style={{ background: 'radial-gradient(circle, #64748b, transparent 70%)' }} />
+                <div className="absolute top-1/2 -left-32 w-[350px] h-[350px] rounded-full opacity-[0.03]"
+                    style={{ background: 'radial-gradient(circle, #94a3b8, transparent 70%)' }} />
+            </div>
 
             {/* ═══════════ HEADER ═══════════ */}
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -531,7 +509,7 @@ export default function TransaccionesPage() {
                                 const info = CATEGORIES[c.cat as CategoryKey] || CATEGORIES.otros;
                                 return (
                                     <button key={c.cat} onClick={() => setFilterCategory(filterCategory === c.cat ? "" : c.cat)}
-                                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors ${filterCategory === c.cat ? "bg-[#2badee]/5" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}>
+                                        className={`w-full flex items-center gap-3 p-2 rounded-lg transition-colors ${filterCategory === c.cat ? "bg-slate-100 dark:bg-slate-800/80" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}>
                                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${info.color}15` }}>
                                             <span className="material-icons-round text-sm" style={{ color: info.color }}>{info.icon}</span>
                                         </div>
@@ -550,7 +528,7 @@ export default function TransaccionesPage() {
                     {totalIncome > 0 && (
                         <div className="bg-white dark:bg-[#1a262d] rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-5">
                             <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                                <span className="material-icons-round text-[#2badee] text-lg">balance</span>
+                                <span className="material-icons-round text-slate-500 text-lg">balance</span>
                                 Ingreso vs Gasto
                             </h3>
                             {/* Visual bar */}

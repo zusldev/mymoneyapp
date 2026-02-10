@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-
-interface Message { id: string; role: string; content: string; createdAt: string; }
+import type { ChatMessage as Message } from "../lib/types";
 
 const quickActions = [
     { label: "¿Puedo gastar $500 hoy?", icon: "shopping_cart" },
@@ -32,8 +31,12 @@ export default function AsistentePage() {
         try {
             const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
             const data = await res.json();
-            const aiMsg: Message = { id: (new Date().getTime() + 1).toString(), role: "assistant", content: data.message || data.error, createdAt: new Date().toISOString() };
-            setMessages(prev => [...prev, aiMsg]);
+            if (data.error) {
+                setMessages(prev => [...prev, { id: (new Date().getTime() + 1).toString(), role: "assistant", content: `⚠️ ${data.error}`, createdAt: new Date().toISOString() }]);
+            } else {
+                const aiMsg: Message = { id: (new Date().getTime() + 1).toString(), role: "assistant", content: data.message, createdAt: new Date().toISOString() };
+                setMessages(prev => [...prev, aiMsg]);
+            }
         } catch {
             setMessages(prev => [...prev, { id: (new Date().getTime() + 1).toString(), role: "assistant", content: "Error al conectar con el asistente.", createdAt: new Date().toISOString() }]);
         }
@@ -93,11 +96,13 @@ export default function AsistentePage() {
                             ? "bg-[#2badee] text-white rounded-br-md shadow-md shadow-[#2badee]/20"
                             : "bg-white dark:bg-[#1a262d] text-slate-800 dark:text-slate-200 border border-slate-100 dark:border-slate-800 rounded-bl-md shadow-sm"
                             }`}>
-                            <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{
-                                __html: msg.content
-                                    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-                                    .replace(/\n/g, "<br>")
-                            }} />
+                            <div className="whitespace-pre-wrap">
+                                {msg.content.split(/(\*\*.*?\*\*)/g).map((part, pi) =>
+                                    part.startsWith('**') && part.endsWith('**')
+                                        ? <strong key={pi}>{part.slice(2, -2)}</strong>
+                                        : <span key={pi}>{part}</span>
+                                )}
+                            </div>
                             <p className={`text-[10px] mt-2 ${msg.role === "user" ? "text-white/60" : "text-slate-400"}`}>
                                 {new Date(msg.createdAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
                             </p>
