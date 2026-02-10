@@ -1,7 +1,7 @@
 /**
  * release-screenshots.ts
  *
- * Captures 1920×1080 dark-mode screenshots of every dashboard page
+ * Captures 1920×1080 screenshots of every dashboard page
  * and saves them to public/releases/vX.Y.Z/
  *
  * Usage:
@@ -55,7 +55,7 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport: VIEWPORT,
-    colorScheme: "dark",
+    colorScheme: "light",
     locale: "es-ES",
   });
 
