@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  name         String
+  type         String
+  balance      Float         @default(0)
+  currency     String        @default("MXN")
+  color        String        @default("#06b6d4")
+  icon         String        @default("wallet")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  transactions Transaction[]
+
+  @@map("accounts")
+}
+
+model CreditCard {
+  id           String        @id @default(cuid())
+  name         String
+  bank         String        @default("")
+  lastFour     String        @default("") @map("last_four")
+  creditLimit  Float         @map("credit_limit")
+  balance      Float         @default(0)
+  cutDate      Int           @default(1) @map("cut_date")
+  payDate      Int           @default(20) @map("pay_date")
+  apr          Float         @default(0)
+  color        String        @default("#8b5cf6")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  transactions Transaction[]
+
+  @@map("credit_cards")
+}
+
+model Transaction {
+  id                 String        @id @default(cuid())
+  amount             Float
+  type               String
+  date               DateTime      @default(now())
+  merchant           String        @default("")
+  merchantNormalized String        @default("") @map("merchant_normalized")
+  description        String        @default("")
+  category           String        @default("otros")
+  isSubscription     Boolean       @default(false) @map("is_subscription")
+  isFeeOrInterest    Boolean       @default(false) @map("is_fee_or_interest")
+  confidenceScore    Int           @default(100) @map("confidence_score")
+  accountId          String?       @map("account_id")
+  account            Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  creditCardId       String?       @map("credit_card_id")
+  creditCard         CreditCard?   @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+  subscriptionId     String?       @map("subscription_id")
+  subscription       Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  @@index([date])
+  @@index([category])
+  @@index([accountId])
+  @@index([creditCardId])
+  @@map("transactions")
+}
+
+model Subscription {
+  id           String        @id @default(cuid())
+  name         String
+  amount       Float
+  frequency    String        @default("monthly")
+  category     String        @default("suscripciones")
+  nextDate     DateTime      @map("next_date")
+  active       Boolean       @default(true)
+  color        String        @default("#f59e0b")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  transactions Transaction[]
+
+  @@map("subscriptions")
+}
+
+model Income {
+  id        String   @id @default(cuid())
+  name      String
+  amount    Float
+  frequency String   @default("monthly")
+  nextDate  DateTime @map("next_date")
+  source    String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("incomes")
+}
+
+model FinancialGoal {
+  id            String   @id @default(cuid())
+  name          String
+  targetAmount  Float    @map("target_amount")
+  currentAmount Float    @default(0) @map("current_amount")
+  deadline      DateTime
+  priority      String   @default("medium")
+  color         String   @default("#10b981")
+  icon          String   @default("target")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("financial_goals")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("chat_messages")
+}
