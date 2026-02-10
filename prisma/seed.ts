@@ -103,7 +103,7 @@ async function seed() {
                 merchant: tx.merchant, category: tx.category,
                 accountId: tx.accountId || null,
                 creditCardId: tx.creditCardId || null,
-                isFeeOrInterest: (tx as any).isFee || false,
+                isFeeOrInterest: (tx as { isFee?: boolean }).isFee || false,
             },
         });
     }

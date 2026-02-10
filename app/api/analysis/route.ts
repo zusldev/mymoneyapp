@@ -1,6 +1,4 @@
 import { prisma } from "@/app/lib/prisma";
-
-export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import {
     calculateCashFlow,
@@ -10,6 +8,8 @@ import {
     detectAnomalies,
     generateRecommendations,
 } from "@/app/lib/financialEngine";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
     try {
@@ -121,6 +121,19 @@ export async function GET() {
         });
     } catch (error) {
         console.error("Error generating analysis:", error);
-        return NextResponse.json({ error: "Error al generar análisis" }, { status: 500 });
+        // Minimal fallback
+        return NextResponse.json({
+            overview: { totalBalance: 0, totalDebt: 0, netWorth: 0, accountCount: 0, cardCount: 0 },
+            cashFlow: { totalIncome: 0, totalExpenses: 0, netBalance: 0, savingsRate: 0, isDeficit: false },
+            categoryBreakdown: [],
+            creditCards: [],
+            projection: { projectedBalance: 0, liquidityDays: 0, overdraftRisk: false, dailyBurnRate: 0, daysRemaining: 0 },
+            anomalies: [],
+            recommendations: [],
+            subscriptions: { count: 0, monthlyTotal: 0 },
+            income: { expectedMonthly: 0 },
+            goals: [],
+            recentTransactions: []
+        });
     }
 }

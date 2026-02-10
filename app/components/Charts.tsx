@@ -101,8 +101,9 @@ export function BarChart({
                 cornerRadius: 12,
                 padding: 12,
                 callbacks: {
-                    label: (ctx: { parsed: { y: number } }) => {
-                        return ` $${ctx.parsed.y.toLocaleString("es-MX")}`;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    label: (ctx: any) => {
+                        return ` $${(ctx.parsed.y || 0).toLocaleString("es-MX")}`;
                     },
                 },
             },
@@ -128,5 +129,5 @@ export function BarChart({
         },
     };
 
-    return <Bar data={chartData} options={options as any} />;
+    return <Bar data={chartData} options={options} />;
 }

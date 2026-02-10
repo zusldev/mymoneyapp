@@ -2,47 +2,45 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-    LayoutDashboard,
-    ArrowRightLeft,
-    CreditCard,
-    Target,
-    Bot,
-} from "lucide-react";
 
-const mobileNavItems = [
-    { href: "/", label: "Inicio", icon: LayoutDashboard },
-    { href: "/transacciones", label: "Movimientos", icon: ArrowRightLeft },
-    { href: "/tarjetas", label: "Tarjetas", icon: CreditCard },
-    { href: "/metas", label: "Metas", icon: Target },
-    { href: "/asistente", label: "AI CFO", icon: Bot },
+const MOBILE_NAV = [
+    { href: "/", label: "Inicio", icon: "dashboard" },
+    { href: "/transacciones", label: "Mov.", icon: "account_balance_wallet" },
+    { href: "/calendario", label: "Calendario", icon: "calendar_month" },
+    { href: "/metas", label: "Metas", icon: "savings" },
+    { href: "/asistente", label: "IA", icon: "smart_toy" },
 ];
 
 export function MobileNav() {
     const pathname = usePathname();
 
     return (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-strong safe-area-bottom z-50">
-            <div className="flex items-center justify-around px-2 py-2">
-                {mobileNavItems.map((item) => {
-                    const isActive = pathname === item.href ||
-                        (item.href !== "/" && pathname.startsWith(item.href));
-                    const Icon = item.icon;
-
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`nav-item-mobile relative flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[60px] ${isActive
-                                    ? "active text-accent"
-                                    : "text-muted"
-                                }`}
-                        >
-                            <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? "scale-110" : ""}`} />
-                            <span className="text-[10px] font-medium">{item.label}</span>
-                        </Link>
-                    );
-                })}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 safe-area-bottom">
+            {/* Glassmorphism backdrop */}
+            <div className="bg-white/90 dark:bg-[#1a262d]/90 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-700/80 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+                <div className="flex items-center justify-around px-2 py-1.5">
+                    {MOBILE_NAV.map((item) => {
+                        const isActive = pathname === item.href;
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 active:scale-90 ${isActive
+                                    ? "text-[#2badee]"
+                                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                    }`}
+                            >
+                                <div className="relative">
+                                    <span className={`material-icons-round text-xl ${isActive ? "scale-110" : ""} transition-transform`}>{item.icon}</span>
+                                    {isActive && (
+                                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#2badee] rounded-full" />
+                                    )}
+                                </div>
+                                <span className={`text-[10px] font-medium ${isActive ? "font-semibold" : ""}`}>{item.label}</span>
+                            </Link>
+                        );
+                    })}
+                </div>
             </div>
         </nav>
     );

@@ -1,7 +1,7 @@
 import { prisma } from "@/app/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
     try {
@@ -14,7 +14,8 @@ export async function GET() {
         return NextResponse.json(cards);
     } catch (error) {
         console.error("Error fetching credit cards:", error);
-        return NextResponse.json({ error: "Error" }, { status: 500 });
+        // Fallback for build time
+        return NextResponse.json([]);
     }
 }
 

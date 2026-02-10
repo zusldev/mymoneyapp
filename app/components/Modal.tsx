@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, ReactNode } from "react";
-import { X } from "lucide-react";
 
 export function Modal({
     isOpen,
@@ -25,27 +24,36 @@ export function Modal({
         return () => { document.body.style.overflow = ""; };
     }, [isOpen]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (
         <div
             ref={overlayRef}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in"
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4"
             onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
         >
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" />
 
             {/* Modal */}
-            <div className="relative glass-strong rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto animate-fade-in-up">
+            <div className="relative bg-white dark:bg-[#1a262d] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] sm:max-h-[85vh] overflow-y-auto shadow-xl border border-slate-200/50 dark:border-slate-700/50 animate-slide-up">
                 {/* Header */}
-                <div className="flex items-center justify-between p-5 border-b border-border/50 sticky top-0 glass-strong rounded-t-2xl z-10">
-                    <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+                <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white/95 dark:bg-[#1a262d]/95 backdrop-blur-sm rounded-t-2xl z-10">
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h2>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-surface-hover transition-colors text-muted hover:text-foreground"
+                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                     >
-                        <X className="w-4 h-4" />
+                        <span className="material-icons-round text-xl">close</span>
                     </button>
                 </div>
                 {/* Body */}
