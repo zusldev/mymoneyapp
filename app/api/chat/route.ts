@@ -1,5 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
-import { toMajorUnits } from "@/app/lib/money";
+import { percentages, toMajorUnits } from "@/app/lib/money";
 
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
@@ -40,6 +40,23 @@ export async function POST(request: NextRequest) {
         const totalDebtCents = cards.reduce((s, c) => s + c.balanceCents, 0);
         const totalBalance = toMajorUnits(totalBalanceCents);
         const totalDebt = toMajorUnits(totalDebtCents);
+        const cardLines = cards.map((c) => {
+            const utilization = percentages(c.balanceCents, c.creditLimitCents, {
+                clamp: true,
+                decimals: 0,
+            });
+            return `${c.name}: $${toMajorUnits(c.balanceCents).toLocaleString()} de $${toMajorUnits(c.creditLimitCents).toLocaleString()} (${utilization}% utilización)`;
+        });
+        const goalLines = goals.map((g) => {
+            const progress = percentages(g.currentAmountCents, g.targetAmountCents, {
+                clamp: true,
+                decimals: 0,
+            });
+            return `${g.name}: $${toMajorUnits(g.currentAmountCents)} de $${toMajorUnits(g.targetAmountCents)} (${progress}%)`;
+        });
+        const recentTxLines = recentTx.slice(0, 10).map((t) =>
+            `${t.type === "income" ? "+" : "-"}$${toMajorUnits(Math.abs(t.amountCents))} ${t.merchant || t.category} (${new Date(t.date).toLocaleDateString("es-MX")})`,
+        );
 
         const financialContext = `
 CONTEXTO FINANCIERO DEL USUARIO:
@@ -47,11 +64,11 @@ CONTEXTO FINANCIERO DEL USUARIO:
 - Deuda total en tarjetas: $${totalDebt.toLocaleString()} MXN
 - Patrimonio neto: $${(totalBalance - totalDebt).toLocaleString()} MXN
 - Cuentas: ${accounts.map(a => `${a.name} ($${toMajorUnits(a.balanceCents).toLocaleString()})`).join(", ") || "Ninguna"}
-- Tarjetas: ${cards.map(c => `${c.name}: $${toMajorUnits(c.balanceCents).toLocaleString()} de $${toMajorUnits(c.creditLimitCents).toLocaleString()} (${((c.balanceCents / c.creditLimitCents) * 100).toFixed(0)}% utilización)`).join("; ") || "Ninguna"}
+- Tarjetas: ${cardLines.join("; ") || "Ninguna"}
 - Suscripciones activas: ${subscriptions.map(s => `${s.name} $${toMajorUnits(s.amountCents)}`).join(", ") || "Ninguna"}
 - Ingresos: ${incomes.map(i => `${i.name} $${toMajorUnits(i.amountCents)} ${i.frequency}`).join(", ") || "No registrados"}
-- Metas: ${goals.map(g => `${g.name}: $${toMajorUnits(g.currentAmountCents)} de $${toMajorUnits(g.targetAmountCents)} (${((g.currentAmountCents / g.targetAmountCents) * 100).toFixed(0)}%)`).join("; ") || "Ninguna"}
-- Últimas transacciones: ${recentTx.slice(0, 10).map(t => `${t.type === "income" ? "+" : "-"}$${toMajorUnits(Math.abs(t.amountCents))} ${t.merchant || t.category} (${new Date(t.date).toLocaleDateString("es-MX")})`).join("; ") || "Ninguna"}`;
+- Metas: ${goalLines.join("; ") || "Ninguna"}
+- Últimas transacciones: ${recentTxLines.join("; ") || "Ninguna"}`;
 
         // Get chat history
         const history = await prisma.chatMessage.findMany({
@@ -83,15 +100,15 @@ CONTEXTO FINANCIERO DEL USUARIO:
         } else {
             // Fallback without AI
             assistantMessage = generateFallbackResponse(message, {
-                totalBalance,
-                totalDebt,
-                accounts: accounts.map((a) => ({ name: a.name, balance: toMajorUnits(a.balanceCents) })),
+                totalBalanceCents,
+                totalDebtCents,
+                accounts: accounts.map((a) => ({ name: a.name, balanceCents: a.balanceCents })),
                 cards: cards.map((c) => ({
                     name: c.name,
-                    balance: toMajorUnits(c.balanceCents),
-                    creditLimit: toMajorUnits(c.creditLimitCents),
+                    balanceCents: c.balanceCents,
+                    creditLimitCents: c.creditLimitCents,
                 })),
-                subscriptions: subscriptions.map((s) => ({ name: s.name, amount: toMajorUnits(s.amountCents) })),
+                subscriptions: subscriptions.map((s) => ({ name: s.name, amountCents: s.amountCents })),
             });
         }
 
@@ -120,20 +137,36 @@ export async function GET() {
 
 function generateFallbackResponse(
     message: string,
-    ctx: { totalBalance: number; totalDebt: number; accounts: { name: string; balance: number }[]; cards: { name: string; balance: number; creditLimit: number }[]; subscriptions: { name: string; amount: number }[] }
+    ctx: {
+        totalBalanceCents: number;
+        totalDebtCents: number;
+        accounts: { name: string; balanceCents: number }[];
+        cards: { name: string; balanceCents: number; creditLimitCents: number }[];
+        subscriptions: { name: string; amountCents: number }[];
+    }
 ): string {
     const msg = message.toLowerCase();
+    const totalBalance = toMajorUnits(ctx.totalBalanceCents);
+    const totalDebt = toMajorUnits(ctx.totalDebtCents);
+    const netWorth = toMajorUnits(ctx.totalBalanceCents - ctx.totalDebtCents);
 
     if (msg.includes("puedo gastar") || msg.includes("puedo comprar")) {
-        return `📊 **Tu balance disponible es $${ctx.totalBalance.toLocaleString()} MXN**\n\nAntes de gastar, considera:\n- Deuda en tarjetas: $${ctx.totalDebt.toLocaleString()}\n- Patrimonio neto: $${(ctx.totalBalance - ctx.totalDebt).toLocaleString()}\n\n💡 Como regla general, no gastes más del 30% de tus ingresos mensuales en una sola compra.\n\n⚠️ *Para respuestas más personalizadas, configura tu API key de OpenAI en .env.local*`;
+        return `📊 **Tu balance disponible es $${totalBalance.toLocaleString()} MXN**\n\nAntes de gastar, considera:\n- Deuda en tarjetas: $${totalDebt.toLocaleString()}\n- Patrimonio neto: $${netWorth.toLocaleString()}\n\n💡 Como regla general, no gastes más del 30% de tus ingresos mensuales en una sola compra.\n\n⚠️ *Para respuestas más personalizadas, configura tu API key de OpenAI en .env.local*`;
     }
 
     if (msg.includes("tarjeta") || msg.includes("pagar")) {
-        const cardInfo = ctx.cards.map(c =>
-            `- **${c.name}**: $${c.balance.toLocaleString()} / $${c.creditLimit.toLocaleString()} (${((c.balance / c.creditLimit) * 100).toFixed(0)}% utilización)`
-        ).join("\n");
+        const cardInfo = ctx.cards
+            .map((c) => {
+                const utilization = percentages(c.balanceCents, c.creditLimitCents, {
+                    clamp: true,
+                    decimals: 0,
+                });
+                return `- **${c.name}**: $${toMajorUnits(c.balanceCents).toLocaleString()} / $${toMajorUnits(c.creditLimitCents).toLocaleString()} (${utilization}% utilización)`;
+            })
+            .join("\n");
         return `💳 **Resumen de tarjetas:**\n\n${cardInfo || "No hay tarjetas registradas."}\n\n💡 Prioriza pagar la tarjeta con mayor tasa de interés (método avalancha).\n\n⚠️ *Configura tu API key de OpenAI para recomendaciones más detalladas.*`;
     }
 
-    return `📊 **Resumen rápido:**\n- Balance: $${ctx.totalBalance.toLocaleString()}\n- Deuda: $${ctx.totalDebt.toLocaleString()}\n- Patrimonio neto: $${(ctx.totalBalance - ctx.totalDebt).toLocaleString()}\n- Suscripciones: ${ctx.subscriptions.length} activas ($${ctx.subscriptions.reduce((s, sub) => s + sub.amount, 0).toLocaleString()}/mes)\n\n¿En qué puedo ayudarte? Puedo analizar gastos, crear planes de pago, o evaluar si puedes hacer una compra.\n\n⚠️ *Para IA avanzada, configura OPENAI_API_KEY en .env.local*`;
+    const subsTotalCents = ctx.subscriptions.reduce((s, sub) => s + sub.amountCents, 0);
+    return `📊 **Resumen rápido:**\n- Balance: $${totalBalance.toLocaleString()}\n- Deuda: $${totalDebt.toLocaleString()}\n- Patrimonio neto: $${netWorth.toLocaleString()}\n- Suscripciones: ${ctx.subscriptions.length} activas ($${toMajorUnits(subsTotalCents).toLocaleString()}/mes)\n\n¿En qué puedo ayudarte? Puedo analizar gastos, crear planes de pago, o evaluar si puedes hacer una compra.\n\n⚠️ *Para IA avanzada, configura OPENAI_API_KEY en .env.local*`;
 }

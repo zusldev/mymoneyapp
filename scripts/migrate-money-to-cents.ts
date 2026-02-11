@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Pool } from "pg";
+import { Pool, PoolClient } from "pg";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -12,170 +12,252 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+const MAX_MAJOR_UNITS_FOR_INT = 21474836.47; // 2_147_483_647 / 100
+
+type BackfillTask = {
+  table: string;
+  centsColumn: string;
+  legacyColumn: string;
+  defaultValue?: number;
+};
+
+type BackfillResult = {
+  label: string;
+  migrated: number;
+  nullFilled: number;
+};
+
+function ident(value: string): string {
+  return `"${value.replace(/"/g, "\"\"")}"`;
+}
+
+function qname(table: string, column: string): string {
+  return `${ident(table)}.${ident(column)}`;
+}
+
+async function columnExists(
+  client: PoolClient,
+  table: string,
+  column: string,
+): Promise<boolean> {
+  const result = await client.query<{
+    exists: boolean;
+  }>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = $1
+          AND column_name = $2
+      ) AS exists
+    `,
+    [table, column],
+  );
+  return result.rows[0]?.exists === true;
+}
+
+async function countRows(
+  client: PoolClient,
+  query: string,
+  params: unknown[] = [],
+): Promise<number> {
+  const result = await client.query<{ count: string }>(query, params);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+async function backfillCents(
+  client: PoolClient,
+  task: BackfillTask,
+): Promise<BackfillResult> {
+  const table = ident(task.table);
+  const cents = ident(task.centsColumn);
+  const legacy = ident(task.legacyColumn);
+  const centsRef = qname(task.table, task.centsColumn);
+  const legacyRef = qname(task.table, task.legacyColumn);
+  const label = `${task.table}.${task.centsColumn}`;
+
+  await client.query(`
+    ALTER TABLE ${table}
+    ADD COLUMN IF NOT EXISTS ${cents} INTEGER
+  `);
+
+  const legacyExists = await columnExists(client, task.table, task.legacyColumn);
+
+  if (legacyExists) {
+    const malformedCount = await countRows(
+      client,
+      `
+        SELECT COUNT(*)::text AS count
+        FROM ${table}
+        WHERE ${centsRef} IS NULL
+          AND ${legacyRef} IS NOT NULL
+          AND (
+            TRIM(${legacyRef}::text) IN ('NaN', 'Infinity', '-Infinity')
+            OR ABS(${legacyRef}) > $1
+          )
+      `,
+      [MAX_MAJOR_UNITS_FOR_INT],
+    );
+
+    if (malformedCount > 0) {
+      throw new Error(
+        `Valores inválidos en ${label}: ${malformedCount} fila(s) fuera de rango/NaN/Infinity.`,
+      );
+    }
+  }
+
+  const migratedResult = legacyExists
+    ? await client.query(`
+        UPDATE ${table}
+        SET ${cents} = ROUND(${legacy} * 100)::INTEGER
+        WHERE ${cents} IS NULL
+          AND ${legacy} IS NOT NULL
+      `)
+    : { rowCount: 0 };
+
+  if (legacyExists) {
+    const mismatchCount = await countRows(
+      client,
+      `
+        SELECT COUNT(*)::text AS count
+        FROM ${table}
+        WHERE ${centsRef} IS NOT NULL
+          AND ${legacyRef} IS NOT NULL
+          AND ${centsRef} <> ROUND(${legacyRef} * 100)::INTEGER
+      `,
+    );
+
+    if (mismatchCount > 0) {
+      throw new Error(
+        `Inconsistencia detectada en ${label}: ${mismatchCount} fila(s) no coinciden con ${task.legacyColumn}.`,
+      );
+    }
+  } else {
+    const nullWithoutLegacy = await countRows(
+      client,
+      `
+        SELECT COUNT(*)::text AS count
+        FROM ${table}
+        WHERE ${cents} IS NULL
+      `,
+    );
+
+    if (nullWithoutLegacy > 0) {
+      throw new Error(
+        `No se puede completar ${label}: falta ${task.legacyColumn} y hay ${nullWithoutLegacy} fila(s) con centavos NULL.`,
+      );
+    }
+  }
+
+  const nullFilledResult = await client.query(`
+    UPDATE ${table}
+    SET ${cents} = 0
+    WHERE ${cents} IS NULL
+  `);
+
+  if (task.defaultValue !== undefined) {
+    await client.query(`
+      ALTER TABLE ${table}
+      ALTER COLUMN ${cents} SET DEFAULT ${task.defaultValue}
+    `);
+  }
+
+  await client.query(`
+    ALTER TABLE ${table}
+    ALTER COLUMN ${cents} SET NOT NULL
+  `);
+
+  return {
+    label,
+    migrated: migratedResult.rowCount ?? 0,
+    nullFilled: nullFilledResult.rowCount ?? 0,
+  };
+}
+
 async function run() {
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    // Accounts
-    await client.query(`
-      ALTER TABLE accounts
-      ADD COLUMN IF NOT EXISTS balance_cents INTEGER
-    `);
-    const accountsResult = await client.query(`
-      UPDATE accounts
-      SET balance_cents = ROUND(balance * 100)::INTEGER
-      WHERE balance_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE accounts
-      SET balance_cents = 0
-      WHERE balance_cents IS NULL
-    `);
-    await client.query(`
-      ALTER TABLE accounts
-      ALTER COLUMN balance_cents SET DEFAULT 0,
-      ALTER COLUMN balance_cents SET NOT NULL
-    `);
+    const results: BackfillResult[] = [];
 
-    // Credit cards
-    await client.query(`
-      ALTER TABLE credit_cards
-      ADD COLUMN IF NOT EXISTS credit_limit_cents INTEGER,
-      ADD COLUMN IF NOT EXISTS balance_cents INTEGER
-    `);
-    const cardsLimitResult = await client.query(`
-      UPDATE credit_cards
-      SET credit_limit_cents = ROUND(credit_limit * 100)::INTEGER
-      WHERE credit_limit_cents IS NULL
-    `);
-    const cardsBalanceResult = await client.query(`
-      UPDATE credit_cards
-      SET balance_cents = ROUND(balance * 100)::INTEGER
-      WHERE balance_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE credit_cards
-      SET credit_limit_cents = 0
-      WHERE credit_limit_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE credit_cards
-      SET balance_cents = 0
-      WHERE balance_cents IS NULL
-    `);
-    await client.query(`
-      ALTER TABLE credit_cards
-      ALTER COLUMN credit_limit_cents SET NOT NULL,
-      ALTER COLUMN balance_cents SET DEFAULT 0,
-      ALTER COLUMN balance_cents SET NOT NULL
-    `);
+    results.push(
+      await backfillCents(client, {
+        table: "accounts",
+        centsColumn: "balance_cents",
+        legacyColumn: "balance",
+        defaultValue: 0,
+      }),
+    );
 
-    // Transactions
-    await client.query(`
-      ALTER TABLE transactions
-      ADD COLUMN IF NOT EXISTS amount_cents INTEGER
-    `);
-    const txResult = await client.query(`
-      UPDATE transactions
-      SET amount_cents = ROUND(amount * 100)::INTEGER
-      WHERE amount_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE transactions
-      SET amount_cents = 0
-      WHERE amount_cents IS NULL
-    `);
-    await client.query(`
-      ALTER TABLE transactions
-      ALTER COLUMN amount_cents SET NOT NULL
-    `);
+    results.push(
+      await backfillCents(client, {
+        table: "credit_cards",
+        centsColumn: "credit_limit_cents",
+        legacyColumn: "credit_limit",
+      }),
+    );
 
-    // Subscriptions
-    await client.query(`
-      ALTER TABLE subscriptions
-      ADD COLUMN IF NOT EXISTS amount_cents INTEGER
-    `);
-    const subsResult = await client.query(`
-      UPDATE subscriptions
-      SET amount_cents = ROUND(amount * 100)::INTEGER
-      WHERE amount_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE subscriptions
-      SET amount_cents = 0
-      WHERE amount_cents IS NULL
-    `);
-    await client.query(`
-      ALTER TABLE subscriptions
-      ALTER COLUMN amount_cents SET NOT NULL
-    `);
+    results.push(
+      await backfillCents(client, {
+        table: "credit_cards",
+        centsColumn: "balance_cents",
+        legacyColumn: "balance",
+        defaultValue: 0,
+      }),
+    );
 
-    // Incomes
-    await client.query(`
-      ALTER TABLE incomes
-      ADD COLUMN IF NOT EXISTS amount_cents INTEGER
-    `);
-    const incomesResult = await client.query(`
-      UPDATE incomes
-      SET amount_cents = ROUND(amount * 100)::INTEGER
-      WHERE amount_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE incomes
-      SET amount_cents = 0
-      WHERE amount_cents IS NULL
-    `);
-    await client.query(`
-      ALTER TABLE incomes
-      ALTER COLUMN amount_cents SET NOT NULL
-    `);
+    results.push(
+      await backfillCents(client, {
+        table: "transactions",
+        centsColumn: "amount_cents",
+        legacyColumn: "amount",
+      }),
+    );
 
-    // Goals
-    await client.query(`
-      ALTER TABLE financial_goals
-      ADD COLUMN IF NOT EXISTS target_amount_cents INTEGER,
-      ADD COLUMN IF NOT EXISTS current_amount_cents INTEGER
-    `);
-    const goalsTargetResult = await client.query(`
-      UPDATE financial_goals
-      SET target_amount_cents = ROUND(target_amount * 100)::INTEGER
-      WHERE target_amount_cents IS NULL
-    `);
-    const goalsCurrentResult = await client.query(`
-      UPDATE financial_goals
-      SET current_amount_cents = ROUND(current_amount * 100)::INTEGER
-      WHERE current_amount_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE financial_goals
-      SET target_amount_cents = 0
-      WHERE target_amount_cents IS NULL
-    `);
-    await client.query(`
-      UPDATE financial_goals
-      SET current_amount_cents = 0
-      WHERE current_amount_cents IS NULL
-    `);
-    await client.query(`
-      ALTER TABLE financial_goals
-      ALTER COLUMN target_amount_cents SET NOT NULL,
-      ALTER COLUMN current_amount_cents SET DEFAULT 0,
-      ALTER COLUMN current_amount_cents SET NOT NULL
-    `);
+    results.push(
+      await backfillCents(client, {
+        table: "subscriptions",
+        centsColumn: "amount_cents",
+        legacyColumn: "amount",
+      }),
+    );
+
+    results.push(
+      await backfillCents(client, {
+        table: "incomes",
+        centsColumn: "amount_cents",
+        legacyColumn: "amount",
+      }),
+    );
+
+    results.push(
+      await backfillCents(client, {
+        table: "financial_goals",
+        centsColumn: "target_amount_cents",
+        legacyColumn: "target_amount",
+      }),
+    );
+
+    results.push(
+      await backfillCents(client, {
+        table: "financial_goals",
+        centsColumn: "current_amount_cents",
+        legacyColumn: "current_amount",
+        defaultValue: 0,
+      }),
+    );
 
     await client.query("COMMIT");
 
     console.log("Backfill money->cents completado:");
-    console.log(`- accounts.balance_cents: ${accountsResult.rowCount} filas migradas`);
-    console.log(`- credit_cards.credit_limit_cents: ${cardsLimitResult.rowCount} filas migradas`);
-    console.log(`- credit_cards.balance_cents: ${cardsBalanceResult.rowCount} filas migradas`);
-    console.log(`- transactions.amount_cents: ${txResult.rowCount} filas migradas`);
-    console.log(`- subscriptions.amount_cents: ${subsResult.rowCount} filas migradas`);
-    console.log(`- incomes.amount_cents: ${incomesResult.rowCount} filas migradas`);
-    console.log(`- financial_goals.target_amount_cents: ${goalsTargetResult.rowCount} filas migradas`);
-    console.log(`- financial_goals.current_amount_cents: ${goalsCurrentResult.rowCount} filas migradas`);
+    for (const item of results) {
+      console.log(
+        `- ${item.label}: ${item.migrated} migradas, ${item.nullFilled} NULL->0`,
+      );
+    }
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

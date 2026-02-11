@@ -1,14 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import type { Account, Income } from "../lib/types";
 import { apiGet, apiPost, normalizeApiError } from "../lib/api";
 import { incomeArraySchema, accountArraySchema } from "../lib/schemas";
 import { toastError, toastSuccess } from "../lib/toast";
+import { parse, percentages, toMajorUnits } from "../lib/money";
+import { toMonthlyCents, type RecurrenceFrequency } from "../lib/dates";
 
 const FREQ: Record<string, string> = { monthly: "Mensual", biweekly: "Quincenal", weekly: "Semanal" };
-const FREQ_MONTHLY: Record<string, number> = { monthly: 1, biweekly: 2, weekly: 4.33 };
 const TYPE_LABELS: Record<string, string> = { fixed: "Fijo", variable: "Variable" };
 
 const ICONS = [
@@ -18,8 +20,9 @@ const ICONS = [
 ];
 
 /* ═══ Helpers ═══ */
-function toMonthly(amount: number, freq: string) {
-    return amount * (FREQ_MONTHLY[freq] || 1);
+function amountCentsOf(value: { amountCents?: number; amount?: number }) {
+    if (typeof value.amountCents === "number") return value.amountCents;
+    return parse(value.amount ?? 0);
 }
 
 function daysUntil(dateStr: string) {
@@ -89,6 +92,7 @@ export default function IngresosPage() {
     const [editing, setEditing] = useState<Income | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState<string | null>(null);
     const [form, setForm] = useState({
         name: "", amount: "", frequency: "monthly", type: "fixed",
@@ -114,9 +118,15 @@ export default function IngresosPage() {
 
     /* ── Computed ── */
     const active = incomes.filter(i => i.active);
-    const monthlyTotal = active.reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
-    const fixedTotal = active.filter(i => i.type === "fixed").reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
-    const fixedPct = monthlyTotal > 0 ? Math.round((fixedTotal / monthlyTotal) * 100) : 0;
+    const monthlyTotalCents = active.reduce(
+        (s, i) => s + toMonthlyCents(amountCentsOf(i), i.frequency as RecurrenceFrequency),
+        0,
+    );
+    const fixedTotalCents = active
+        .filter(i => i.type === "fixed")
+        .reduce((s, i) => s + toMonthlyCents(amountCentsOf(i), i.frequency as RecurrenceFrequency), 0);
+    const monthlyTotal = toMajorUnits(monthlyTotalCents);
+    const fixedPct = percentages(fixedTotalCents, monthlyTotalCents, { clamp: true, decimals: 0 });
     const stability = getStabilityInfo(fixedPct);
     const upcoming = getNextOccurrences(incomes, 8); // Increased count for strip
 
@@ -128,7 +138,7 @@ export default function IngresosPage() {
     };
     const openEdit = (i: Income) => {
         setEditing(i);
-        setForm({ name: i.name, amount: i.amount.toString(), frequency: i.frequency, type: i.type || "fixed", nextDate: i.nextDate.split("T")[0], source: i.source, icon: i.icon || "payments", accountId: i.accountId || "", creditCardId: i.creditCardId || "" });
+        setForm({ name: i.name, amount: toMajorUnits(amountCentsOf(i)).toString(), frequency: i.frequency, type: i.type || "fixed", nextDate: i.nextDate.split("T")[0], source: i.source, icon: i.icon || "payments", accountId: i.accountId || "", creditCardId: i.creditCardId || "" });
         setModalOpen(true);
     };
     const handleSubmit = async (e: React.FormEvent) => {
@@ -147,8 +157,12 @@ export default function IngresosPage() {
             setIsSaving(false);
         }
     };
-    const del = async (id: string) => {
-        if (!confirm("¿Eliminar este ingreso?")) return;
+    const requestDelete = (id: string) => {
+        setPendingDeleteId(id);
+    };
+    const confirmDelete = async () => {
+        if (!pendingDeleteId) return;
+        const id = pendingDeleteId;
         setIsDeleting(id);
         try {
             await apiPost(`/api/incomes/${id}`, null, undefined, "DELETE");
@@ -159,6 +173,7 @@ export default function IngresosPage() {
             toastError(failure.error);
         } finally {
             setIsDeleting(null);
+            setPendingDeleteId(null);
         }
     };
     const toggleActive = async (i: Income) => {
@@ -245,7 +260,7 @@ export default function IngresosPage() {
                                         {ev.income.name}
                                     </p>
                                     <p className={`text-xs ${isNext ? "text-emerald-100" : "text-emerald-600"}`}>
-                                        +{formatCurrency(ev.income.amount)}
+                                        +{formatCurrency(toMajorUnits(amountCentsOf(ev.income)))}
                                     </p>
                                 </div>
                             </div>
@@ -289,7 +304,7 @@ export default function IngresosPage() {
                     </div>
                     <div>
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Anual Est.</p>
-                        <p className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(monthlyTotal * 12)}</p>
+                        <p className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(toMajorUnits(monthlyTotalCents * 12))}</p>
                     </div>
                 </div>
             </div>
@@ -333,7 +348,11 @@ export default function IngresosPage() {
                                             <p className="text-xs text-slate-500 dark:text-slate-400">{inc.source || "Sin fuente específica"}</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => openEdit(inc)} className="text-slate-300 hover:text-emerald-600 transition-colors">
+                                    <button
+                                        aria-label={`Editar ingreso ${inc.name}`}
+                                        onClick={() => openEdit(inc)}
+                                        className="touch-target focus-ring text-slate-300 hover:text-emerald-600 transition-colors"
+                                    >
                                         <span className="material-icons-round">more_vert</span>
                                     </button>
                                 </div>
@@ -363,16 +382,26 @@ export default function IngresosPage() {
                                     <div className="text-right">
                                         <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Monto</p>
                                         <p className="text-lg font-bold text-slate-900 dark:text-white tabular-nums">
-                                            +{formatCurrency(inc.amount)}
+                                            +{formatCurrency(toMajorUnits(amountCentsOf(inc)))}
                                         </p>
                                     </div>
                                 </div>
 
                                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-100 dark:border-slate-700 p-1 flex gap-1">
-                                    <button disabled={isSyncing === inc.id} onClick={() => toggleActive(inc)} className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-emerald-600 disabled:opacity-60">
+                                    <button
+                                        aria-label={inc.active ? `Pausar ingreso ${inc.name}` : `Activar ingreso ${inc.name}`}
+                                        disabled={isSyncing === inc.id}
+                                        onClick={() => toggleActive(inc)}
+                                        className="touch-target focus-ring p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-emerald-600 disabled:opacity-60"
+                                    >
                                         <span className="material-icons-round text-lg">{inc.active ? "pause" : "play_arrow"}</span>
                                     </button>
-                                    <button disabled={isDeleting === inc.id} onClick={() => del(inc.id)} className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 disabled:opacity-60">
+                                    <button
+                                        aria-label={`Eliminar ingreso ${inc.name}`}
+                                        disabled={isDeleting === inc.id}
+                                        onClick={() => requestDelete(inc.id)}
+                                        className="touch-target focus-ring p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 disabled:opacity-60"
+                                    >
                                         <span className="material-icons-round text-lg">delete</span>
                                     </button>
                                 </div>
@@ -474,6 +503,15 @@ export default function IngresosPage() {
                     </div>
                 </form>
             </Modal>
+            <ConfirmDialog
+                open={pendingDeleteId !== null}
+                title="Eliminar ingreso"
+                description="Esta acción eliminará el ingreso de forma permanente."
+                confirmText="Eliminar"
+                loading={isDeleting !== null}
+                onCancel={() => setPendingDeleteId(null)}
+                onConfirm={confirmDelete}
+            />
         </div>
     );
 }

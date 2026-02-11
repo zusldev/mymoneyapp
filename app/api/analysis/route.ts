@@ -10,7 +10,7 @@ import {
 } from "@/app/lib/financialEngine";
 import { toMonthlyCents } from "@/app/lib/dates";
 import { goalDto, txDto } from "@/app/lib/serverMoney";
-import { toMajorUnits } from "@/app/lib/money";
+import { percentages, toMajorUnits } from "@/app/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +117,10 @@ export async function GET() {
             },
             goals: goals.map((g) => ({
                 ...goalDto(g),
-                progress: g.targetAmountCents > 0 ? (g.currentAmountCents / g.targetAmountCents) * 100 : 0,
+                progress: percentages(g.currentAmountCents, g.targetAmountCents, {
+                    clamp: true,
+                    decimals: 2,
+                }),
             })),
             recentTransactions: monthTransactions.slice(0, 10).map(txDto),
         });

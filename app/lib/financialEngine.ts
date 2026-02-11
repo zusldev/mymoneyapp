@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { CATEGORIES, CategoryKey } from "./categories";
 import {
   format as formatMoney,
@@ -163,7 +164,10 @@ export function analyzeCreditCard(card: {
     amount: card.balance ?? 0,
   });
 
-  const utilization = creditLimitCents > 0 ? (balanceCents / creditLimitCents) * 100 : 0;
+  const utilization = percentages(balanceCents, creditLimitCents, {
+    clamp: false,
+    decimals: 2,
+  });
 
   let riskLevel: CreditCardAnalysis["riskLevel"];
   let impactDescription: string;
@@ -182,7 +186,10 @@ export function analyzeCreditCard(card: {
     impactDescription = "¡Utilización crítica! Alto riesgo de sobreendeudamiento.";
   }
 
-  const minimumPaymentCents = Math.max(Math.round(balanceCents * 0.03), Math.min(20000, balanceCents));
+  const minimumPaymentCents = Math.max(
+    new Decimal(balanceCents).mul(0.03).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber(),
+    Math.min(20000, balanceCents),
+  );
   const noInterestPaymentCents = balanceCents;
   const availableCreditCents = Math.max(0, creditLimitCents - balanceCents);
 
@@ -234,7 +241,13 @@ export function projectEndOfMonth(
 
   const liquidityDays =
     projection.dailyBurnCents > 0
-      ? Math.min(Math.floor(currentBalanceCents / projection.dailyBurnCents), 999)
+      ? Math.min(
+          new Decimal(currentBalanceCents)
+            .div(projection.dailyBurnCents)
+            .floor()
+            .toNumber(),
+          999,
+        )
       : 999;
 
   return {
@@ -305,7 +318,10 @@ export function detectAnomalies(
     .map((t) => Math.abs(resolveAmountCents(t)));
 
   if (amounts.length > 5) {
-    const avg = Math.round(sum(amounts) / amounts.length);
+    const avg = new Decimal(sum(amounts))
+      .div(amounts.length)
+      .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+      .toNumber();
     for (const tx of transactions) {
       const txCents = Math.abs(resolveAmountCents(tx));
       if (txCents > avg * 3 && tx.category !== "transferencias") {

@@ -7,7 +7,7 @@ export interface Account {
   name: string;
   icon: string;
   color: string;
-  balanceCents?: number;
+  balanceCents: number;
   // Compat during migration:
   balance?: number;
 }
@@ -58,11 +58,11 @@ export interface CreditCard {
 }
 
 export interface CardData extends CreditCard {
-  creditLimitCents?: number;
-  balanceCents?: number;
+  creditLimitCents: number;
+  balanceCents: number;
   // Compat:
-  creditLimit: number;
-  balance: number;
+  creditLimit?: number;
+  balance?: number;
   cutDate: number;
   payDate: number;
   apr: number;
@@ -73,8 +73,8 @@ export interface CardData extends CreditCard {
 
 export interface Transaction {
   id: string;
-  amountCents?: number;
-  amount: number;
+  amountCents: number;
+  amount?: number;
   type: string;
   date: string;
   merchant: string;
@@ -89,8 +89,8 @@ export interface Transaction {
 
 export interface CalendarTransaction {
   id: string;
-  amountCents?: number;
-  amount: number;
+  amountCents: number;
+  amount?: number;
   type: "income" | "expense";
   date: string;
   description: string;
@@ -103,8 +103,8 @@ export interface CalendarTransaction {
 export interface Subscription {
   id: string;
   name: string;
-  amountCents?: number;
-  amount: number;
+  amountCents: number;
+  amount?: number;
   frequency: string;
   category: string;
   type: string;
@@ -122,8 +122,8 @@ export interface Subscription {
 export interface CalendarSubscription {
   id: string;
   name: string;
-  amountCents?: number;
-  amount: number;
+  amountCents: number;
+  amount?: number;
   nextDate: string;
   frequency: string;
   active: boolean;
@@ -135,8 +135,8 @@ export interface CalendarSubscription {
 export interface Income {
   id: string;
   name: string;
-  amountCents?: number;
-  amount: number;
+  amountCents: number;
+  amount?: number;
   frequency: string;
   type: string;
   nextDate: string;
@@ -155,8 +155,8 @@ export interface Income {
 export interface Goal {
   id: string;
   name: string;
-  targetAmountCents?: number;
-  currentAmountCents?: number;
+  targetAmountCents: number;
+  currentAmountCents: number;
   targetAmount: number;
   currentAmount: number;
   deadline: string;

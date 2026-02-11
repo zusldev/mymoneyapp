@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import { CATEGORIES, CATEGORY_KEYS } from "../lib/categories";
@@ -7,6 +8,8 @@ import type { Account, CreditCard, Subscription as Sub } from "../lib/types";
 import { apiGet, apiPost, normalizeApiError } from "../lib/api";
 import { accountArraySchema, creditCardArraySchema, incomeArraySchema, subscriptionArraySchema } from "../lib/schemas";
 import { toastError, toastSuccess } from "../lib/toast";
+import { parse, percentages, toMajorUnits } from "../lib/money";
+import { toMonthlyCents, toYearlyCents, type RecurrenceFrequency } from "../lib/dates";
 
 type Filter = "all" | "active" | "paused";
 
@@ -24,15 +27,15 @@ const SUB_ICONS = [
 ];
 
 /* === Helpers === */
+function amountCentsOf(value: { amount?: number; amountCents?: number }) {
+    if (typeof value.amountCents === "number") return value.amountCents;
+    return parse(value.amount ?? 0);
+}
 function toMonthly(amount: number, freq: string) {
-    if (freq === "yearly") return amount / 12;
-    if (freq === "weekly") return amount * 4.33;
-    return amount;
+    return toMajorUnits(toMonthlyCents(parse(amount), freq as RecurrenceFrequency));
 }
 function toYearly(amount: number, freq: string) {
-    if (freq === "yearly") return amount;
-    if (freq === "weekly") return amount * 52;
-    return amount * 12;
+    return toMajorUnits(toYearlyCents(parse(amount), freq as RecurrenceFrequency));
 }
 
 function daysUntil(dateStr: string) {
@@ -61,13 +64,14 @@ export default function SuscripcionesPage() {
     const [subs, setSubs] = useState<Sub[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [cards, setCards] = useState<CreditCard[]>([]);
-    const [incomes, setIncomes] = useState<{ amount: number; frequency: string; active: boolean }[]>([]);
+    const [incomes, setIncomes] = useState<{ amount?: number; amountCents?: number; frequency: string; active: boolean }[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<Filter>("all");
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Sub | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState<string | null>(null);
     const [simulateCancelled, setSimulateCancelled] = useState<Set<string>>(new Set());
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -100,25 +104,43 @@ export default function SuscripcionesPage() {
     /* -- Computed -- */
     const activeSubs = subs.filter(s => s.active);
     const pausedSubs = subs.filter(s => !s.active);
-    const monthlyTotal = activeSubs.reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
-    const yearlyTotal = activeSubs.reduce((s, i) => s + toYearly(i.amount, i.frequency), 0);
-    const monthlyIncome = incomes.filter(i => i.active).reduce((s, i) => {
-        const m = i.frequency === "weekly" ? i.amount * 4.33 : i.frequency === "biweekly" ? i.amount * 2 : i.amount;
-        return s + m;
-    }, 0);
-    const incomePct = monthlyIncome > 0 ? Math.round((monthlyTotal / monthlyIncome) * 100) : 0;
+    const monthlyTotalCents = activeSubs.reduce(
+        (s, i) => s + toMonthlyCents(amountCentsOf(i), i.frequency as RecurrenceFrequency),
+        0,
+    );
+    const yearlyTotalCents = activeSubs.reduce(
+        (s, i) => s + toYearlyCents(amountCentsOf(i), i.frequency as RecurrenceFrequency),
+        0,
+    );
+    const monthlyIncomeCents = incomes
+        .filter(i => i.active)
+        .reduce((s, i) => s + toMonthlyCents(amountCentsOf(i), i.frequency as RecurrenceFrequency), 0);
+    const incomePct = percentages(monthlyTotalCents, monthlyIncomeCents, { clamp: true, decimals: 0 });
 
-    const criticalTotal = activeSubs.filter(s => s.type === "critical").reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
-    const productiveTotal = activeSubs.filter(s => s.type === "productive").reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0);
-    const entertainmentTotal = Math.max(0, monthlyTotal - criticalTotal - productiveTotal);
+    const criticalTotalCents = activeSubs
+        .filter(s => s.type === "critical")
+        .reduce((s, i) => s + toMonthlyCents(amountCentsOf(i), i.frequency as RecurrenceFrequency), 0);
+    const productiveTotalCents = activeSubs
+        .filter(s => s.type === "productive")
+        .reduce((s, i) => s + toMonthlyCents(amountCentsOf(i), i.frequency as RecurrenceFrequency), 0);
+    const entertainmentTotalCents = Math.max(0, monthlyTotalCents - criticalTotalCents - productiveTotalCents);
+
+    const monthlyTotal = toMajorUnits(monthlyTotalCents);
+    const yearlyTotal = toMajorUnits(yearlyTotalCents);
+    const criticalTotal = toMajorUnits(criticalTotalCents);
+    const productiveTotal = toMajorUnits(productiveTotalCents);
+    const entertainmentTotal = toMajorUnits(entertainmentTotalCents);
 
     // Safe percentages (avoid NaN on division by zero)
-    const safePct = (val: number) => monthlyTotal > 0 ? Math.round((val / monthlyTotal) * 100) : 0;
-    const criticalPct = safePct(criticalTotal);
-    const productivePct = safePct(productiveTotal);
-    const entertainmentPct = safePct(entertainmentTotal);
+    const safePct = (valCents: number) => percentages(valCents, monthlyTotalCents, { clamp: true, decimals: 0 });
+    const criticalPct = safePct(criticalTotalCents);
+    const productivePct = safePct(productiveTotalCents);
+    const entertainmentPct = safePct(entertainmentTotalCents);
 
-    const filtered = filter === "active" ? activeSubs : filter === "paused" ? pausedSubs : subs;
+    const filtered = useMemo(
+        () => (filter === "active" ? activeSubs : filter === "paused" ? pausedSubs : subs),
+        [filter, activeSubs, pausedSubs, subs],
+    );
 
     // Upcoming payments - next 5 sorted by date
     const upcoming = useMemo(() =>
@@ -129,10 +151,11 @@ export default function SuscripcionesPage() {
     );
 
     /* -- Simulator -- */
-    const simSavingsMonthly = Array.from(simulateCancelled).reduce((s, id) => {
+    const simSavingsMonthlyCents = Array.from(simulateCancelled).reduce((s, id) => {
         const sub = activeSubs.find(x => x.id === id);
-        return sub ? s + toMonthly(sub.amount, sub.frequency) : s;
+        return sub ? s + toMonthlyCents(amountCentsOf(sub), sub.frequency as RecurrenceFrequency) : s;
     }, 0);
+    const simSavingsMonthly = toMajorUnits(simSavingsMonthlyCents);
     const toggleSimulate = (id: string) => {
         const n = new Set(simulateCancelled);
         if (n.has(id)) n.delete(id); else n.add(id);
@@ -149,8 +172,13 @@ export default function SuscripcionesPage() {
             list.push({ icon: "check_circle", title: "Suscripciones bajo control", desc: `Solo ${incomePct}% de tus ingresos va a suscripciones. \u00a1Bien gestionado!`, type: "success" });
         }
 
-        if (monthlyTotal > 0 && entertainmentTotal / monthlyTotal > 0.6 && activeSubs.length > 2) {
-            list.push({ icon: "sports_esports", title: "Entretenimiento dominante", desc: `${Math.round((entertainmentTotal / monthlyTotal) * 100)}% de tus suscripciones son ocio. Revisa si todas aportan valor.`, type: "info" });
+        if (monthlyTotalCents > 0 && percentages(entertainmentTotalCents, monthlyTotalCents, { clamp: false, decimals: 0 }) > 60 && activeSubs.length > 2) {
+            list.push({
+                icon: "sports_esports",
+                title: "Entretenimiento dominante",
+                desc: `${percentages(entertainmentTotalCents, monthlyTotalCents, { clamp: true, decimals: 0 })}% de tus suscripciones son ocio. Revisa si todas aportan valor.`,
+                type: "info",
+            });
         }
 
         const streamingSubs = activeSubs.filter(s => ["entretenimiento", "suscripciones"].includes(s.category) && s.type === "entertainment");
@@ -164,12 +192,13 @@ export default function SuscripcionesPage() {
             list.push({ icon: "history", title: "Suscripci\u00f3n longeva", desc: `"${oldest.name}" lleva ${monthsSince(oldest.createdAt)} meses activa. Revisa si a\u00fan la necesitas.`, type: "info" });
         }
 
-        if (entertainmentTotal > 0 && activeSubs.filter(s => s.type === "entertainment").length >= 2) {
-            list.push({ icon: "savings", title: "Oportunidad de ahorro", desc: `Cancelar las suscripciones de ocio menos usadas te ahorrar\u00eda ~${formatCurrency(entertainmentTotal * 0.4)}/mes.`, type: "success" });
+        if (entertainmentTotalCents > 0 && activeSubs.filter(s => s.type === "entertainment").length >= 2) {
+            const estimatedSavingsCents = Math.round(entertainmentTotalCents * 0.4);
+            list.push({ icon: "savings", title: "Oportunidad de ahorro", desc: `Cancelar las suscripciones de ocio menos usadas te ahorrar\u00eda ~${formatCurrency(toMajorUnits(estimatedSavingsCents))}/mes.`, type: "success" });
         }
 
         return list;
-    }, [incomePct, monthlyTotal, entertainmentTotal, activeSubs]);
+    }, [incomePct, monthlyTotalCents, entertainmentTotalCents, activeSubs]);
 
     /* -- CRUD -- */
     const openCreate = () => {
@@ -179,7 +208,7 @@ export default function SuscripcionesPage() {
     };
     const openEdit = (s: Sub) => {
         setEditing(s);
-        setForm({ name: s.name, amount: s.amount.toString(), frequency: s.frequency, category: s.category, type: s.type || "entertainment", nextDate: s.nextDate.split("T")[0], color: s.color, icon: s.icon || "sync", accountId: s.accountId || "", creditCardId: s.creditCardId || "" });
+        setForm({ name: s.name, amount: toMajorUnits(amountCentsOf(s)).toString(), frequency: s.frequency, category: s.category, type: s.type || "entertainment", nextDate: s.nextDate.split("T")[0], color: s.color, icon: s.icon || "sync", accountId: s.accountId || "", creditCardId: s.creditCardId || "" });
         setModalOpen(true);
     };
     const handleSubmit = async (e: React.FormEvent) => {
@@ -211,8 +240,12 @@ export default function SuscripcionesPage() {
             setIsSyncing(null);
         }
     };
-    const del = async (id: string) => {
-        if (!confirm("\u00bfEliminar esta suscripci\u00f3n?")) return;
+    const requestDelete = (id: string) => {
+        setPendingDeleteId(id);
+    };
+    const confirmDelete = async () => {
+        if (!pendingDeleteId) return;
+        const id = pendingDeleteId;
         setIsDeleting(id);
         try {
             await apiPost(`/api/subscriptions/${id}`, null, undefined, "DELETE");
@@ -223,6 +256,7 @@ export default function SuscripcionesPage() {
             toastError(failure.error);
         } finally {
             setIsDeleting(null);
+            setPendingDeleteId(null);
         }
     };
 
@@ -234,7 +268,7 @@ export default function SuscripcionesPage() {
     );
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 pb-28 relative">
+        <div className="max-w-5xl mx-auto space-y-8 pb-28 relative no-glass-inside">
             {/* Purple ambient */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
                 <div className="absolute -top-20 right-10 w-[420px] h-[420px] rounded-full opacity-[0.06]"
@@ -369,7 +403,7 @@ export default function SuscripcionesPage() {
 
                                     <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{sub.name}</p>
                                     <p className="text-lg font-black text-slate-900 dark:text-white tabular-nums mt-1">
-                                        {formatCurrency(sub.amount)}
+                                        {formatCurrency(toMajorUnits(amountCentsOf(sub)))}
                                     </p>
                                     <p className="text-[10px] text-slate-400 mt-1">
                                         {new Date(sub.nextDate).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}
@@ -467,10 +501,10 @@ export default function SuscripcionesPage() {
 
                                         <div className="text-right shrink-0">
                                             <p className="text-base font-bold text-slate-900 dark:text-white tabular-nums">
-                                                {formatCurrency(sub.amount)}
+                                                {formatCurrency(toMajorUnits(amountCentsOf(sub)))}
                                             </p>
                                             <p className="text-[10px] text-slate-400 tabular-nums">
-                                                {formatCurrency(toMonthly(sub.amount, sub.frequency))}/mes
+                                                {formatCurrency(toMonthly(toMajorUnits(amountCentsOf(sub)), sub.frequency))}/mes
                                             </p>
                                         </div>
 
@@ -515,7 +549,7 @@ export default function SuscripcionesPage() {
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="material-icons-round text-sm text-violet-400">savings</span>
                                                         <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">
-                                                            {formatCurrency(toYearly(sub.amount, sub.frequency))}
+                                                            {formatCurrency(toYearly(toMajorUnits(amountCentsOf(sub)), sub.frequency))}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -527,7 +561,7 @@ export default function SuscripcionesPage() {
                                                     <div className="flex items-center justify-between mb-1.5">
                                                         <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Antig&uuml;edad</span>
                                                         <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 tabular-nums">
-                                                            {monthsSince(sub.createdAt)} meses &middot; {formatCurrency(toMonthly(sub.amount, sub.frequency) * monthsSince(sub.createdAt))} total pagado
+                                                            {monthsSince(sub.createdAt)} meses &middot; {formatCurrency(toMonthly(toMajorUnits(amountCentsOf(sub)), sub.frequency) * monthsSince(sub.createdAt))} total pagado
                                                         </span>
                                                     </div>
                                                     <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
@@ -539,7 +573,9 @@ export default function SuscripcionesPage() {
 
                                             {/* Actions */}
                                             <div className="flex gap-2">
-                                                <button onClick={(e) => { e.stopPropagation(); toggleSimulate(sub.id); }}
+                                                <button
+                                                    aria-label={isSimulated ? `Restaurar simulación de ${sub.name}` : `Simular cancelación de ${sub.name}`}
+                                                    onClick={(e) => { e.stopPropagation(); toggleSimulate(sub.id); }}
                                                     className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${isSimulated
                                                         ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40"
                                                         : "bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 border border-slate-200/60 dark:border-white/10 hover:border-amber-200 dark:hover:border-amber-800/40"
@@ -547,17 +583,28 @@ export default function SuscripcionesPage() {
                                                     <span className="material-icons-round text-sm">science</span>
                                                     {isSimulated ? "Restaurar" : "Simular"}
                                                 </button>
-                                                <button disabled={isSyncing === sub.id} onClick={(e) => { e.stopPropagation(); toggleActive(sub); }}
-                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40 disabled:opacity-60">
+                                                <button
+                                                    aria-label={sub.active ? `Pausar suscripción ${sub.name}` : `Activar suscripción ${sub.name}`}
+                                                    disabled={isSyncing === sub.id}
+                                                    onClick={(e) => { e.stopPropagation(); toggleActive(sub); }}
+                                                    className="touch-target focus-ring py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40 disabled:opacity-60"
+                                                >
                                                     <span className="material-icons-round text-sm">{sub.active ? "pause" : "play_arrow"}</span>
                                                     {sub.active ? "Pausar" : "Activar"}
                                                 </button>
-                                                <button onClick={(e) => { e.stopPropagation(); openEdit(sub); }}
-                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40">
+                                                <button
+                                                    aria-label={`Editar suscripción ${sub.name}`}
+                                                    onClick={(e) => { e.stopPropagation(); openEdit(sub); }}
+                                                    className="touch-target focus-ring py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40"
+                                                >
                                                     <span className="material-icons-round text-sm">edit</span>
                                                 </button>
-                                                <button disabled={isDeleting === sub.id} onClick={(e) => { e.stopPropagation(); del(sub.id); }}
-                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-red-500 hover:border-red-200 dark:hover:border-red-800/40 disabled:opacity-60">
+                                                <button
+                                                    aria-label={`Eliminar suscripción ${sub.name}`}
+                                                    disabled={isDeleting === sub.id}
+                                                    onClick={(e) => { e.stopPropagation(); requestDelete(sub.id); }}
+                                                    className="touch-target focus-ring py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-red-500 hover:border-red-200 dark:hover:border-red-800/40 disabled:opacity-60"
+                                                >
                                                     <span className="material-icons-round text-sm">delete_outline</span>
                                                 </button>
                                             </div>
@@ -640,7 +687,7 @@ export default function SuscripcionesPage() {
                                                         <span className="material-icons-round" style={{ fontSize: '12px' }}>{s.icon || "sync"}</span>
                                                     </div>
                                                     <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{s.name}</span>
-                                                    <span className="text-slate-500 dark:text-slate-400 tabular-nums font-medium">{formatCurrency(toMonthly(s.amount, s.frequency))}</span>
+                                                    <span className="text-slate-500 dark:text-slate-400 tabular-nums font-medium">{formatCurrency(toMonthly(toMajorUnits(amountCentsOf(s)), s.frequency))}</span>
                                                 </div>
                                             ))}
                                             {group.subs.length > 3 && (
@@ -783,6 +830,15 @@ export default function SuscripcionesPage() {
                     </div>
                 </form>
             </Modal>
+            <ConfirmDialog
+                open={pendingDeleteId !== null}
+                title="Eliminar suscripción"
+                description="Esta acción eliminará la suscripción de forma permanente."
+                confirmText="Eliminar"
+                loading={isDeleting !== null}
+                onCancel={() => setPendingDeleteId(null)}
+                onConfirm={confirmDelete}
+            />
         </div>
     );
 }
