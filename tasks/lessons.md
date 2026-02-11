@@ -40,3 +40,18 @@
 - **What happened**: Deleted migrations folder while database already contained data. Prisma detected drift and attempted reset.
 - **Root cause**: Migration history did not match existing database state.
 - **Rule**: Never delete migrations in a live project. If history is lost, create a baseline using `prisma migrate diff` and mark it applied with `prisma migrate resolve`.
+
+### 2026-02-11 — Credit card legacy mirror field broke deploy build
+- **What happened**: `next build` failed in `app/api/credit-cards/route.ts` because Prisma expected legacy `credit_limit` while the create payload only sent `creditLimitCents`.
+- **Root cause**: Legacy non-cents mirror field remained required in Prisma schema, but create/update/seed paths were not consistently writing it. Local Prisma client artifacts were also out of sync with schema in this environment.
+- **Rule**: If a legacy mirror column is still required, populate it deterministically from `*_cents` in every write path (API + seed) until the DB/schema migration fully removes or relaxes that requirement.
+
+### 2026-02-11 — No CI checks allowed broken deploys to be merged
+- **What happened**: PRs were merged without automated lint/test/build checks, and a deploy-breaking TypeScript error reached `master`.
+- **Root cause**: The repository had no `.github/workflows` pipeline and no enforced required status checks.
+- **Rule**: Keep a mandatory CI workflow with required checks (`lint`, `test`, `build`) on PRs to `develop` and `master`, and never merge while any check is pending/failing.
+
+### 2026-02-11 — Legacy mirror fix must be applied model-wide, not endpoint-wise
+- **What happened**: After fixing `credit_cards`, CI still failed in `app/api/goals/route.ts` because `financial_goals.target_amount` remained required while writes only sent `targetAmountCents`.
+- **Root cause**: The legacy-mirror mitigation was applied to one model, but not across all models that still expose required legacy major-unit columns.
+- **Rule**: When legacy major-unit columns are still required, audit and patch all create/update/seed paths for every affected model in the same change set.

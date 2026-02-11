@@ -1,5 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
-import { goalDto, parseAmountInput } from "@/app/lib/serverMoney";
+import { goalDto, majorFromCents, parseAmountInput } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -15,17 +15,22 @@ export async function PUT(
     try {
         const { id } = await params;
         const body = await request.json();
+        const targetAmountCents = body.targetAmount !== undefined ? parseAmountInput(body.targetAmount) : undefined;
+        const currentAmountCents = body.currentAmount !== undefined ? parseAmountInput(body.currentAmount) : undefined;
+        const data = {
+            name: body.name,
+            target_amount: targetAmountCents !== undefined ? majorFromCents(targetAmountCents) : undefined,
+            current_amount: currentAmountCents !== undefined ? majorFromCents(currentAmountCents) : undefined,
+            targetAmountCents,
+            currentAmountCents,
+            deadline: body.deadline ? new Date(body.deadline) : undefined,
+            priority: body.priority,
+            color: body.color,
+            icon: body.icon,
+        };
         const goal = await prisma.financialGoal.update({
             where: { id },
-            data: {
-                name: body.name,
-                targetAmountCents: body.targetAmount !== undefined ? parseAmountInput(body.targetAmount) : undefined,
-                currentAmountCents: body.currentAmount !== undefined ? parseAmountInput(body.currentAmount) : undefined,
-                deadline: body.deadline ? new Date(body.deadline) : undefined,
-                priority: body.priority,
-                color: body.color,
-                icon: body.icon,
-            },
+            data,
         });
         return NextResponse.json(goalDto(goal));
     } catch (error) {
