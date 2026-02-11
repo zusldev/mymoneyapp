@@ -1,173 +1,193 @@
 # GitHub Standard
 
-Este documento define el estandar oficial de trabajo en GitHub para este proyecto.
+This document defines the official GitHub workflow standard for this project.
 
-Objetivos:
+## Objectives
 
-- Consistencia entre contributors.
-- Trazabilidad de cambios.
-- Seguridad en produccion.
-- Alta legibilidad tecnica.
+- Consistency across contributors  
+- Change traceability  
+- Production safety  
+- High technical readability  
 
-## 1) Modelo de ramas (GitFlow)
+---
 
-Ramas principales:
+## 1) Branching Model (GitFlow)
 
-- `main`: produccion estable.
-- `develop`: integracion continua de trabajo diario.
+### Main branches
 
-Ramas de trabajo:
+- `main`: stable production branch  
+- `develop`: continuous integration of daily work  
 
-- `feature/<scope>-<short-description>`
-- `hotfix/<scope>-<short-description>`
-- `release/vX.Y.Z`
+### Working branches
 
-Reglas:
+- `feature/<scope>-<short-description>`  
+- `hotfix/<scope>-<short-description>`  
+- `release/vX.Y.Z`  
 
-- Features salen de `develop` y vuelven a `develop`.
-- Hotfixes salen de `main` y vuelven a `main`.
-- Todo hotfix mergeado en `main` debe sincronizarse a `develop`.
-- Releases salen de `develop`, se estabilizan, y luego se mergean a `main` (y de vuelta a `develop` si aplica).
+### Rules
 
-## 2) Gate de autorizacion (obligatorio)
+- Features branch off from `develop` and merge back into `develop`.  
+- Hotfixes branch off from `main` and merge back into `main`.  
+- Every hotfix merged into `main` must be synchronized back into `develop`.  
+- Releases branch off from `develop`, are stabilized, and then merged into `main` (and back into `develop` if applicable).  
 
-Antes de iniciar fase de publicacion, se requiere autorizacion explicita del responsable.
+---
 
-Fase de publicacion incluye:
+## 2) Authorization Gate (Mandatory)
 
-- `git add`
-- `git commit`
-- `git push`
-- `gh pr create`
-- `gh pr merge`
-- `gh release create`
+Before starting any publishing phase, explicit authorization from the responsible owner is required.
 
-Sin esta autorizacion, solo se permite analisis, implementacion local y validacion local.
+Publishing phase includes:
 
-## 3) Convencion de commits
+- `git add`  
+- `git commit`  
+- `git push`  
+- `gh pr create`  
+- `gh pr merge`  
+- `gh release create`  
 
-Formato: Conventional Commits.
+Without this authorization, only analysis, local implementation, and local validation are allowed.
 
-Tipos permitidos:
+---
 
-- `feat`
-- `fix`
-- `hotfix`
-- `refactor`
-- `test`
-- `docs`
-- `chore`
-- `ci`
-- `perf`
+## 3) Commit Convention
 
-Ejemplos:
+Format: Conventional Commits.
 
-- `feat: agregar filtro por estrategia`
-- `fix: corregir calculo de profit factor en stats summary`
-- `hotfix: evitar crash en analytics por null toFixed`
+### Allowed types
 
-Reglas:
+- `feat`  
+- `fix`  
+- `hotfix`  
+- `refactor`  
+- `test`  
+- `docs`  
+- `chore`  
+- `ci`  
+- `perf`  
 
-- 1 intencion por commit.
-- Mensaje claro, en imperativo, <= 72 chars en subject.
-- No mezclar refactor grande con fix urgente en el mismo commit.
+### Examples
 
-## 4) Estandar de Pull Request
+- `feat: add strategy filter`  
+- `fix: correct profit factor calculation in stats summary`  
+- `hotfix: prevent analytics crash due to null toFixed`  
 
-Todo PR debe incluir:
+### Rules
 
-- Resumen de problema y solucion.
-- Alcance tecnico (archivos/modulos impactados).
-- Riesgo y plan de rollback.
-- Evidencia de pruebas.
-- Referencia a issue/ticket (si existe).
+- One intention per commit.  
+- Clear message, imperative mood, ≤ 72 characters in subject.  
+- Do not mix large refactors with urgent fixes in the same commit.  
 
-Checklist minimo:
+---
 
-- Lint, tests y build locales en verde.
-- Sin secretos ni credenciales.
-- Tests nuevos para logica critica o cambios de calculo.
-- Documentacion actualizada cuando cambia comportamiento.
+## 4) Pull Request Standard
 
-## 5) Politica de merges
+Every PR must include:
 
-Reglas:
+- Summary of the problem and solution  
+- Technical scope (files/modules impacted)  
+- Risk assessment and rollback plan  
+- Test evidence  
+- Reference to issue/ticket (if applicable)  
 
-- No mergear con checks fallando.
-- No mergear PR sin descripcion tecnica suficiente.
-- Evitar merge directo a `main` excepto hotfix administrado.
+### Minimum checklist
 
-Estrategia recomendada:
+- Lint, tests, and local build passing  
+- No secrets or credentials  
+- New tests for critical logic or calculation changes  
+- Documentation updated when behavior changes  
 
-- PR de feature/hotfix: `Squash and merge` o `Merge commit` segun necesidad de trazabilidad.
-- PR de release: `Merge commit` para preservar contexto de release.
+---
 
-## 6) Branch protection (configurar en GitHub)
+## 5) Merge Policy
 
-Para `main`:
+### Rules
 
-- Require pull request before merging.
+- Do not merge if checks are failing.  
+- Do not merge PRs without sufficient technical description.  
+- Avoid direct merges into `main` except managed hotfixes.  
+
+### Recommended strategy
+
+- Feature/hotfix PR: `Squash and merge` or `Merge commit` depending on traceability needs  
+- Release PR: `Merge commit` to preserve release context  
+
+---
+
+## 6) Branch Protection (Configure in GitHub)
+
+### For `main`
+
+- Require pull request before merging  
 - Require status checks to pass:
-  - CI `lint-build`
-  - checks de deploy requeridos (si aplica entorno productivo).
-- Restrict direct pushes.
-- Require linear history (opcional segun estrategia de merge).
+  - CI `lint-build`  
+  - Required deploy checks (if production environment applies)  
+- Restrict direct pushes  
+- Require linear history (optional depending on merge strategy)  
 
-Para `develop`:
+### For `develop`
 
-- Require pull request before merging.
-- Require CI checks.
-- Bloquear force-push para contributors normales.
+- Require pull request before merging  
+- Require CI checks  
+- Block force-push for regular contributors  
 
-## 7) Calidad y validacion local
+---
 
-Comandos obligatorios antes de PR:
+## 7) Quality and Local Validation
 
-- `npm run lint`
-- `npm test`
-- `npm run build`
+Mandatory commands before opening a PR:
 
-Si no se puede ejecutar alguno, el PR debe explicarlo con motivo tecnico.
+- `npm run lint`  
+- `npm test`  
+- `npm run build`  
 
-## 8) Politica de release (SemVer)
+If any command cannot be executed, the PR must explain the technical reason.
 
-Versionado:
+---
 
-- `MAJOR`: cambios incompatibles.
-- `MINOR`: funcionalidades backward-compatible.
-- `PATCH`: bugfix/hotfix.
+## 8) Release Policy (SemVer)
 
-Cadencia recomendada:
+### Versioning
 
-- Release regular: semanal o quincenal (`MINOR`/`PATCH`).
-- Hotfix critico de calculo/riesgo: en <24h (`PATCH`).
+- `MAJOR`: breaking changes  
+- `MINOR`: backward-compatible features  
+- `PATCH`: bugfix/hotfix  
 
-Checklist de release:
+### Recommended cadence
 
-- PR de release/hotfix mergeado en `main`.
-- Tag `vX.Y.Z`.
-- Release notes claras:
-  - Que cambio.
-  - Impacto para usuarios.
-  - Riesgos y mitigaciones.
-  - Validaciones ejecutadas.
+- Regular release: weekly or biweekly (`MINOR` / `PATCH`)  
+- Critical calculation/risk hotfix: <24h (`PATCH`)  
 
-## 9) Seguridad y cumplimiento
+### Release checklist
 
-- Nunca subir tokens, secretos o datos sensibles.
-- Revisar diffs de `.env`, logs, screenshots y exports.
-- Usar Principle of Least Privilege para permisos de GitHub Actions.
+- Release/hotfix PR merged into `main`  
+- Tag `vX.Y.Z` created  
+- Clear release notes:
+  - What changed  
+  - User impact  
+  - Risks and mitigations  
+  - Executed validations  
 
-## 10) Responsabilidades
+---
 
-Autor del cambio:
+## 9) Security and Compliance
 
-- Implementar y validar.
-- Documentar impacto y riesgos.
-- Responder feedback de review.
+- Never commit tokens, secrets, or sensitive data  
+- Review diffs for `.env`, logs, screenshots, and exports  
+- Use Principle of Least Privilege for GitHub Actions permissions  
 
-Reviewer:
+---
 
-- Verificar exactitud tecnica y riesgo.
-- Confirmar calidad de tests.
-- Validar que el cambio sigue este estandar.
+## 10) Responsibilities
+
+### Change Author
+
+- Implement and validate changes  
+- Document impact and risks  
+- Respond to review feedback  
+
+### Reviewer
+
+- Verify technical accuracy and risk  
+- Confirm test quality  
+- Ensure compliance with this standard  
