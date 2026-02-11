@@ -55,3 +55,8 @@
 - **What happened**: After fixing `credit_cards`, CI still failed in `app/api/goals/route.ts` because `financial_goals.target_amount` remained required while writes only sent `targetAmountCents`.
 - **Root cause**: The legacy-mirror mitigation was applied to one model, but not across all models that still expose required legacy major-unit columns.
 - **Rule**: When legacy major-unit columns are still required, audit and patch all create/update/seed paths for every affected model in the same change set.
+
+### 2026-02-11 — Production recovered from auth error but still failed due pool saturation
+- **What happened**: After correcting malformed `DATABASE_URL`, production APIs still returned 500 with `MaxClientsInSessionMode`.
+- **Root cause**: Per-instance `pg.Pool` size was too high for Vercel serverless concurrency against Supabase Session Pooler limits.
+- **Rule**: In serverless production, keep Prisma adapter `pg.Pool` tiny by default (`max=1`) and make it configurable via env for controlled scaling.
