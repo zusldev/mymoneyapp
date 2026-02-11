@@ -1,10 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import Decimal from "decimal.js";
 import "dotenv/config";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 const toCents = (value: number) => Math.round(value * 100);
+const toMajorFromCents = (cents: number) => new Decimal(cents).div(100).toNumber();
 
 async function seed() {
     console.log("🌱 Seeding database...\n");
@@ -31,14 +33,59 @@ async function seed() {
     console.log("✅ 3 cuentas creadas");
 
     // ─── Credit Cards ───
+    const amexCreditLimitCents = toCents(85000);
+    const amexBalanceCents = toCents(12450.3);
+    const amexData = {
+        name: "AMEX Gold",
+        bank: "American Express",
+        lastFour: "4821",
+        credit_limit: toMajorFromCents(amexCreditLimitCents),
+        balance: toMajorFromCents(amexBalanceCents),
+        creditLimitCents: amexCreditLimitCents,
+        balanceCents: amexBalanceCents,
+        cutDate: 15,
+        payDate: 5,
+        apr: 36.5,
+        color: "#f59e0b",
+    };
     const amex = await prisma.creditCard.create({
-        data: { name: "AMEX Gold", bank: "American Express", lastFour: "4821", creditLimitCents: toCents(85000), balanceCents: toCents(12450.30), cutDate: 15, payDate: 5, apr: 36.5, color: "#f59e0b" },
+        data: amexData,
     });
+    const bbvaCardCreditLimitCents = toCents(120000);
+    const bbvaCardBalanceCents = toCents(34200);
+    const bbvaCardData = {
+        name: "BBVA Platinum",
+        bank: "BBVA",
+        lastFour: "7392",
+        credit_limit: toMajorFromCents(bbvaCardCreditLimitCents),
+        balance: toMajorFromCents(bbvaCardBalanceCents),
+        creditLimitCents: bbvaCardCreditLimitCents,
+        balanceCents: bbvaCardBalanceCents,
+        cutDate: 22,
+        payDate: 12,
+        apr: 28.9,
+        color: "#3b82f6",
+    };
     const bbvaCard = await prisma.creditCard.create({
-        data: { name: "BBVA Platinum", bank: "BBVA", lastFour: "7392", creditLimitCents: toCents(120000), balanceCents: toCents(34200.0), cutDate: 22, payDate: 12, apr: 28.9, color: "#3b82f6" },
+        data: bbvaCardData,
     });
+    const nuCardCreditLimitCents = toCents(45000);
+    const nuCardBalanceCents = toCents(8900.5);
+    const nuCardData = {
+        name: "Nu Card",
+        bank: "Nu",
+        lastFour: "1056",
+        credit_limit: toMajorFromCents(nuCardCreditLimitCents),
+        balance: toMajorFromCents(nuCardBalanceCents),
+        creditLimitCents: nuCardCreditLimitCents,
+        balanceCents: nuCardBalanceCents,
+        cutDate: 1,
+        payDate: 20,
+        apr: 42,
+        color: "#8b5cf6",
+    };
     const nuCard = await prisma.creditCard.create({
-        data: { name: "Nu Card", bank: "Nu", lastFour: "1056", creditLimitCents: toCents(45000), balanceCents: toCents(8900.50), cutDate: 1, payDate: 20, apr: 42.0, color: "#8b5cf6" },
+        data: nuCardData,
     });
     console.log("✅ 3 tarjetas creadas");
 
@@ -139,14 +186,53 @@ async function seed() {
     console.log("✅ 2 ingresos creados");
 
     // ─── Financial Goals ───
+    const emergencyTargetCents = toCents(100000);
+    const emergencyCurrentCents = toCents(65000);
+    const emergencyGoalData = {
+        name: "Fondo de Emergencia",
+        target_amount: toMajorFromCents(emergencyTargetCents),
+        current_amount: toMajorFromCents(emergencyCurrentCents),
+        targetAmountCents: emergencyTargetCents,
+        currentAmountCents: emergencyCurrentCents,
+        deadline: new Date(2026, 11, 31),
+        priority: "high",
+        color: "#06d6a0",
+        icon: "shield",
+    };
     await prisma.financialGoal.create({
-        data: { name: "Fondo de Emergencia", targetAmountCents: toCents(100000), currentAmountCents: toCents(65000), deadline: new Date(2026, 11, 31), priority: "high", color: "#06d6a0", icon: "shield" },
+        data: emergencyGoalData,
     });
+    const europeTargetCents = toCents(80000);
+    const europeCurrentCents = toCents(22000);
+    const europeGoalData = {
+        name: "Viaje a Europa",
+        target_amount: toMajorFromCents(europeTargetCents),
+        current_amount: toMajorFromCents(europeCurrentCents),
+        targetAmountCents: europeTargetCents,
+        currentAmountCents: europeCurrentCents,
+        deadline: new Date(2026, 7, 15),
+        priority: "medium",
+        color: "#3b82f6",
+        icon: "plane",
+    };
     await prisma.financialGoal.create({
-        data: { name: "Viaje a Europa", targetAmountCents: toCents(80000), currentAmountCents: toCents(22000), deadline: new Date(2026, 7, 15), priority: "medium", color: "#3b82f6", icon: "plane" },
+        data: europeGoalData,
     });
+    const macbookTargetCents = toCents(45000);
+    const macbookCurrentCents = toCents(12500);
+    const macbookGoalData = {
+        name: "MacBook Pro",
+        target_amount: toMajorFromCents(macbookTargetCents),
+        current_amount: toMajorFromCents(macbookCurrentCents),
+        targetAmountCents: macbookTargetCents,
+        currentAmountCents: macbookCurrentCents,
+        deadline: new Date(2026, 5, 1),
+        priority: "low",
+        color: "#8b5cf6",
+        icon: "laptop",
+    };
     await prisma.financialGoal.create({
-        data: { name: "MacBook Pro", targetAmountCents: toCents(45000), currentAmountCents: toCents(12500), deadline: new Date(2026, 5, 1), priority: "low", color: "#8b5cf6", icon: "laptop" },
+        data: macbookGoalData,
     });
     console.log("✅ 3 metas creadas");
 

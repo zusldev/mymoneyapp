@@ -1,5 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
-import { goalDto, parseAmountInput } from "@/app/lib/serverMoney";
+import { goalDto, majorFromCents, parseAmountInput } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -19,16 +19,21 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
+        const targetAmountCents = parseAmountInput(body.targetAmount);
+        const currentAmountCents = parseAmountInput(body.currentAmount ?? 0);
+        const data = {
+            name: body.name,
+            target_amount: majorFromCents(targetAmountCents),
+            current_amount: majorFromCents(currentAmountCents),
+            targetAmountCents,
+            currentAmountCents,
+            deadline: new Date(body.deadline),
+            priority: body.priority || "medium",
+            color: body.color || "#10b981",
+            icon: body.icon || "target",
+        };
         const goal = await prisma.financialGoal.create({
-            data: {
-                name: body.name,
-                targetAmountCents: parseAmountInput(body.targetAmount),
-                currentAmountCents: parseAmountInput(body.currentAmount ?? 0),
-                deadline: new Date(body.deadline),
-                priority: body.priority || "medium",
-                color: body.color || "#10b981",
-                icon: body.icon || "target",
-            },
+            data,
         });
         return NextResponse.json(goalDto(goal), { status: 201 });
     } catch (error) {

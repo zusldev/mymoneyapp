@@ -1,5 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
-import { cardDto, parseAmountInput, txDto } from "@/app/lib/serverMoney";
+import { cardDto, majorFromCents, parseAmountInput, txDto } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -35,19 +35,24 @@ export async function PUT(
     const { id } = await params;
     try {
         const body = await request.json();
+        const creditLimitCents = body.creditLimit !== undefined ? parseAmountInput(body.creditLimit) : undefined;
+        const balanceCents = body.balance !== undefined ? parseAmountInput(body.balance) : undefined;
+        const data = {
+            name: body.name,
+            bank: body.bank,
+            lastFour: body.lastFour,
+            credit_limit: creditLimitCents !== undefined ? majorFromCents(creditLimitCents) : undefined,
+            balance: balanceCents !== undefined ? majorFromCents(balanceCents) : undefined,
+            creditLimitCents,
+            balanceCents,
+            cutDate: body.cutDate !== undefined ? parseInt(body.cutDate) : undefined,
+            payDate: body.payDate !== undefined ? parseInt(body.payDate) : undefined,
+            apr: body.apr !== undefined ? parseFloat(body.apr) : undefined,
+            color: body.color,
+        };
         const card = await prisma.creditCard.update({
             where: { id },
-            data: {
-                name: body.name,
-                bank: body.bank,
-                lastFour: body.lastFour,
-                creditLimitCents: body.creditLimit !== undefined ? parseAmountInput(body.creditLimit) : undefined,
-                balanceCents: body.balance !== undefined ? parseAmountInput(body.balance) : undefined,
-                cutDate: body.cutDate !== undefined ? parseInt(body.cutDate) : undefined,
-                payDate: body.payDate !== undefined ? parseInt(body.payDate) : undefined,
-                apr: body.apr !== undefined ? parseFloat(body.apr) : undefined,
-                color: body.color,
-            },
+            data,
         });
         return NextResponse.json(cardDto(card));
     } catch (error) {
