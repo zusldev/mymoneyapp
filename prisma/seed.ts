@@ -186,14 +186,53 @@ async function seed() {
     console.log("✅ 2 ingresos creados");
 
     // ─── Financial Goals ───
+    const emergencyTargetCents = toCents(100000);
+    const emergencyCurrentCents = toCents(65000);
+    const emergencyGoalData = {
+        name: "Fondo de Emergencia",
+        target_amount: toMajorFromCents(emergencyTargetCents),
+        current_amount: toMajorFromCents(emergencyCurrentCents),
+        targetAmountCents: emergencyTargetCents,
+        currentAmountCents: emergencyCurrentCents,
+        deadline: new Date(2026, 11, 31),
+        priority: "high",
+        color: "#06d6a0",
+        icon: "shield",
+    };
     await prisma.financialGoal.create({
-        data: { name: "Fondo de Emergencia", targetAmountCents: toCents(100000), currentAmountCents: toCents(65000), deadline: new Date(2026, 11, 31), priority: "high", color: "#06d6a0", icon: "shield" },
+        data: emergencyGoalData,
     });
+    const europeTargetCents = toCents(80000);
+    const europeCurrentCents = toCents(22000);
+    const europeGoalData = {
+        name: "Viaje a Europa",
+        target_amount: toMajorFromCents(europeTargetCents),
+        current_amount: toMajorFromCents(europeCurrentCents),
+        targetAmountCents: europeTargetCents,
+        currentAmountCents: europeCurrentCents,
+        deadline: new Date(2026, 7, 15),
+        priority: "medium",
+        color: "#3b82f6",
+        icon: "plane",
+    };
     await prisma.financialGoal.create({
-        data: { name: "Viaje a Europa", targetAmountCents: toCents(80000), currentAmountCents: toCents(22000), deadline: new Date(2026, 7, 15), priority: "medium", color: "#3b82f6", icon: "plane" },
+        data: europeGoalData,
     });
+    const macbookTargetCents = toCents(45000);
+    const macbookCurrentCents = toCents(12500);
+    const macbookGoalData = {
+        name: "MacBook Pro",
+        target_amount: toMajorFromCents(macbookTargetCents),
+        current_amount: toMajorFromCents(macbookCurrentCents),
+        targetAmountCents: macbookTargetCents,
+        currentAmountCents: macbookCurrentCents,
+        deadline: new Date(2026, 5, 1),
+        priority: "low",
+        color: "#8b5cf6",
+        icon: "laptop",
+    };
     await prisma.financialGoal.create({
-        data: { name: "MacBook Pro", targetAmountCents: toCents(45000), currentAmountCents: toCents(12500), deadline: new Date(2026, 5, 1), priority: "low", color: "#8b5cf6", icon: "laptop" },
+        data: macbookGoalData,
     });
     console.log("✅ 3 metas creadas");
 
