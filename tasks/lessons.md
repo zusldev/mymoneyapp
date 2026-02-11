@@ -49,7 +49,7 @@
 ### 2026-02-11 — No CI checks allowed broken deploys to be merged
 - **What happened**: PRs were merged without automated lint/test/build checks, and a deploy-breaking TypeScript error reached `master`.
 - **Root cause**: The repository had no `.github/workflows` pipeline and no enforced required status checks.
-- **Rule**: Keep a mandatory CI workflow (`CI / lint`, `CI / test`, `CI / build`) on PRs to `develop` and `master`, and never merge while any check is pending/failing.
+- **Rule**: Keep a mandatory CI workflow with required checks (`lint`, `test`, `build`) on PRs to `develop` and `master`, and never merge while any check is pending/failing.
 
 ### 2026-02-11 — Legacy mirror fix must be applied model-wide, not endpoint-wise
 - **What happened**: After fixing `credit_cards`, CI still failed in `app/api/goals/route.ts` because `financial_goals.target_amount` remained required while writes only sent `targetAmountCents`.
