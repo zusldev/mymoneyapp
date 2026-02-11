@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { parseAmountInput, subDto } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,11 +13,10 @@ export async function GET() {
                 creditCard: { select: { id: true, name: true, bank: true, lastFour: true, color: true } },
             },
         });
-        return NextResponse.json(subscriptions);
+        return NextResponse.json(subscriptions.map(subDto));
     } catch (error) {
         console.error("Error fetching subscriptions:", error);
-        // Fallback for build time
-        return NextResponse.json([]);
+        return NextResponse.json({ ok: false, error: "Error al cargar suscripciones" }, { status: 500 });
     }
 }
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         const sub = await prisma.subscription.create({
             data: {
                 name: body.name,
-                amount: parseFloat(body.amount),
+                amountCents: parseAmountInput(body.amount),
                 frequency: body.frequency || "monthly",
                 category: body.category || "suscripciones",
                 type: body.type || "entertainment",
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
                 creditCardId: body.creditCardId || null,
             },
         });
-        return NextResponse.json(sub, { status: 201 });
+        return NextResponse.json(subDto(sub), { status: 201 });
     } catch (error) {
         console.error("Error creating subscription:", error);
         return NextResponse.json({ error: "Error al crear suscripción" }, { status: 500 });

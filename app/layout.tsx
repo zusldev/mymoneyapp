@@ -1,15 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "./components/Sidebar";
 import { MobileNav } from "./components/MobileNav";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-});
+import { ToastProvider } from "./components/ToastProvider";
 
 export const metadata: Metadata = {
   title: "MyMoneyApp — Tu CFO Personal",
@@ -40,7 +34,7 @@ export default function RootLayout({
       <head>
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
       </head>
-      <body className={`${inter.variable} antialiased font-[var(--font-inter)]`}>
+      <body className="antialiased font-sans">
         <div className="flex h-screen overflow-hidden">
           {/* Desktop Sidebar */}
           <Sidebar />
@@ -54,7 +48,10 @@ export default function RootLayout({
             {/* Header */}
             <header className="h-16 px-4 sm:px-8 flex items-center justify-end sticky top-0 z-10 glass-header">
               <div className="flex items-center gap-3">
-                <button className="relative p-2 text-slate-400 hover:text-[#2badee] transition-all duration-200 hover:bg-[#2badee]/5 rounded-xl">
+                <button
+                  aria-label="Notificaciones"
+                  className="relative p-2 touch-target focus-ring text-slate-400 hover:text-[#2badee] transition-all duration-200 hover:bg-[#2badee]/5 rounded-xl"
+                >
                   <span className="material-icons-round text-xl">notifications</span>
                   <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full border-2 border-[#f6f7f8] dark:border-[#101c22] animate-pulse-soft" />
                 </button>
@@ -76,6 +73,7 @@ export default function RootLayout({
 
           {/* Mobile Bottom Nav */}
           <MobileNav />
+          <ToastProvider />
         </div>
       </body>
     </html>

@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { toMajorUnits } from "@/app/lib/money";
 
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
@@ -35,20 +36,22 @@ export async function POST(request: NextRequest) {
             prisma.financialGoal.findMany(),
         ]);
 
-        const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-        const totalDebt = cards.reduce((s, c) => s + c.balance, 0);
+        const totalBalanceCents = accounts.reduce((s, a) => s + a.balanceCents, 0);
+        const totalDebtCents = cards.reduce((s, c) => s + c.balanceCents, 0);
+        const totalBalance = toMajorUnits(totalBalanceCents);
+        const totalDebt = toMajorUnits(totalDebtCents);
 
         const financialContext = `
 CONTEXTO FINANCIERO DEL USUARIO:
 - Balance total en cuentas: $${totalBalance.toLocaleString()} MXN
 - Deuda total en tarjetas: $${totalDebt.toLocaleString()} MXN
 - Patrimonio neto: $${(totalBalance - totalDebt).toLocaleString()} MXN
-- Cuentas: ${accounts.map(a => `${a.name} ($${a.balance.toLocaleString()})`).join(", ") || "Ninguna"}
-- Tarjetas: ${cards.map(c => `${c.name}: $${c.balance.toLocaleString()} de $${c.creditLimit.toLocaleString()} (${((c.balance / c.creditLimit) * 100).toFixed(0)}% utilización)`).join("; ") || "Ninguna"}
-- Suscripciones activas: ${subscriptions.map(s => `${s.name} $${s.amount}`).join(", ") || "Ninguna"}
-- Ingresos: ${incomes.map(i => `${i.name} $${i.amount} ${i.frequency}`).join(", ") || "No registrados"}
-- Metas: ${goals.map(g => `${g.name}: $${g.currentAmount} de $${g.targetAmount} (${((g.currentAmount / g.targetAmount) * 100).toFixed(0)}%)`).join("; ") || "Ninguna"}
-- Últimas transacciones: ${recentTx.slice(0, 10).map(t => `${t.type === "income" ? "+" : "-"}$${Math.abs(t.amount)} ${t.merchant || t.category} (${new Date(t.date).toLocaleDateString("es-MX")})`).join("; ") || "Ninguna"}`;
+- Cuentas: ${accounts.map(a => `${a.name} ($${toMajorUnits(a.balanceCents).toLocaleString()})`).join(", ") || "Ninguna"}
+- Tarjetas: ${cards.map(c => `${c.name}: $${toMajorUnits(c.balanceCents).toLocaleString()} de $${toMajorUnits(c.creditLimitCents).toLocaleString()} (${((c.balanceCents / c.creditLimitCents) * 100).toFixed(0)}% utilización)`).join("; ") || "Ninguna"}
+- Suscripciones activas: ${subscriptions.map(s => `${s.name} $${toMajorUnits(s.amountCents)}`).join(", ") || "Ninguna"}
+- Ingresos: ${incomes.map(i => `${i.name} $${toMajorUnits(i.amountCents)} ${i.frequency}`).join(", ") || "No registrados"}
+- Metas: ${goals.map(g => `${g.name}: $${toMajorUnits(g.currentAmountCents)} de $${toMajorUnits(g.targetAmountCents)} (${((g.currentAmountCents / g.targetAmountCents) * 100).toFixed(0)}%)`).join("; ") || "Ninguna"}
+- Últimas transacciones: ${recentTx.slice(0, 10).map(t => `${t.type === "income" ? "+" : "-"}$${toMajorUnits(Math.abs(t.amountCents))} ${t.merchant || t.category} (${new Date(t.date).toLocaleDateString("es-MX")})`).join("; ") || "Ninguna"}`;
 
         // Get chat history
         const history = await prisma.chatMessage.findMany({
@@ -79,7 +82,17 @@ CONTEXTO FINANCIERO DEL USUARIO:
             assistantMessage = completion.choices[0]?.message?.content || "No pude generar una respuesta.";
         } else {
             // Fallback without AI
-            assistantMessage = generateFallbackResponse(message, { totalBalance, totalDebt, accounts, cards, subscriptions });
+            assistantMessage = generateFallbackResponse(message, {
+                totalBalance,
+                totalDebt,
+                accounts: accounts.map((a) => ({ name: a.name, balance: toMajorUnits(a.balanceCents) })),
+                cards: cards.map((c) => ({
+                    name: c.name,
+                    balance: toMajorUnits(c.balanceCents),
+                    creditLimit: toMajorUnits(c.creditLimitCents),
+                })),
+                subscriptions: subscriptions.map((s) => ({ name: s.name, amount: toMajorUnits(s.amountCents) })),
+            });
         }
 
         // Save assistant message

@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import type { Goal } from "../lib/types";
+import { apiGet, apiPost, normalizeApiError } from "../lib/api";
+import { goalArraySchema } from "../lib/schemas";
+import { toastError, toastSuccess } from "../lib/toast";
 const colorOpts = ["#10b981", "#06b6d4", "#8b5cf6", "#f59e0b", "#ef4444", "#ec4899", "#3b82f6"];
 
 export default function MetasPage() {
@@ -12,9 +15,20 @@ export default function MetasPage() {
     const [editing, setEditing] = useState<Goal | null>(null);
     const [form, setForm] = useState({ name: "", targetAmount: "", currentAmount: "0", deadline: "", priority: "medium", color: "#10b981" });
     const [now, setNow] = useState<number>(() => Date.now());
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-    const fetch_ = () => { fetch("/api/goals").then(r => r.json()).then(setGoals).finally(() => setLoading(false)); };
-    // eslint-disable-next-line
+    const fetch_ = async () => {
+        try {
+            const data = await apiGet("/api/goals", goalArraySchema);
+            setGoals(Array.isArray(data) ? data : []);
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setLoading(false);
+        }
+    };
     useEffect(() => { fetch_(); setNow(Date.now()); }, []);
 
     const openCreate = () => { setEditing(null); setForm({ name: "", targetAmount: "", currentAmount: "0", deadline: new Date().toISOString().split("T")[0], priority: "medium", color: "#10b981" }); setModalOpen(true); };
@@ -22,12 +36,35 @@ export default function MetasPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const url = editing ? `/api/goals/${editing.id}` : "/api/goals";
-        await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-        setModalOpen(false); fetch_();
+        setIsSaving(true);
+        try {
+            const url = editing ? `/api/goals/${editing.id}` : "/api/goals";
+            await apiPost(url, form, undefined, editing ? "PUT" : "POST");
+            toastSuccess(editing ? "Meta actualizada" : "Meta creada");
+            setModalOpen(false);
+            fetch_();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const del = async (id: string) => { if (!confirm("¿Eliminar?")) return; await fetch(`/api/goals/${id}`, { method: "DELETE" }); fetch_(); };
+    const del = async (id: string) => {
+        if (!confirm("¿Eliminar?")) return;
+        setIsDeleting(id);
+        try {
+            await apiPost(`/api/goals/${id}`, null, undefined, "DELETE");
+            toastSuccess("Meta eliminada");
+            fetch_();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsDeleting(null);
+        }
+    };
 
     const priorityLabels: Record<string, { label: string; bg: string; text: string }> = {
         high: { label: "Alta", bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-600 dark:text-red-400" },
@@ -82,7 +119,7 @@ export default function MetasPage() {
                                     <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-[#2badee] transition-colors">
                                         <span className="material-icons-round text-sm">edit</span>
                                     </button>
-                                    <button onClick={() => del(g.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-colors">
+                                    <button disabled={isDeleting === g.id} onClick={() => del(g.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-60">
                                         <span className="material-icons-round text-sm">delete</span>
                                     </button>
                                 </div>
@@ -152,7 +189,12 @@ export default function MetasPage() {
                         <label className="text-sm text-slate-500 dark:text-slate-400 mb-1 block">Color</label>
                         <div className="flex gap-2">{colorOpts.map((c) => (<button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={`w-8 h-8 rounded-full transition-transform ${form.color === c ? "scale-125 ring-2 ring-[#2badee]/50" : "hover:scale-110"}`} style={{ backgroundColor: c }} />))}</div>
                     </div>
-                    <div className="flex gap-3 pt-2"><button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancelar</button><button type="submit" className="btn-primary flex-1">{editing ? "Guardar" : "Crear"}</button></div>
+                    <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
+                        <button type="submit" className="btn-primary flex-1" disabled={isSaving}>
+                            {isSaving ? "Guardando..." : editing ? "Guardar" : "Crear"}
+                        </button>
+                    </div>
                 </form>
             </Modal>
         </div>

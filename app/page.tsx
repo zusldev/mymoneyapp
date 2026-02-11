@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { formatCurrency } from "./lib/financialEngine";
 import { CATEGORIES } from "./lib/categories";
 import type { AnalysisData } from "./lib/types";
+import { apiGet, normalizeApiError } from "./lib/api";
+import { subscriptionArraySchema } from "./lib/schemas";
+import { toastError } from "./lib/toast";
 
 // Subscription type for upcoming payments
 interface UpcomingSub {
@@ -24,15 +27,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/analysis").then((r) => r.json()),
-      fetch("/api/subscriptions").then((r) => r.json()),
+      apiGet<AnalysisData>("/api/analysis"),
+      apiGet("/api/subscriptions", subscriptionArraySchema),
     ])
       .then(([analysisData, subsData]) => {
         setData(analysisData);
-        setSubs(Array.isArray(subsData) ? subsData : []);
+        setSubs(Array.isArray(subsData) ? (subsData as UpcomingSub[]) : []);
         setNow(Date.now());
       })
-      .catch(console.error)
+      .catch((error) => {
+        const failure = normalizeApiError(error);
+        toastError(failure.error);
+      })
       .finally(() => setLoading(false));
   }, []);
 

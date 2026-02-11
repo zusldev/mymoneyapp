@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { accountDto, parseAmountInput, txDto } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -17,20 +18,13 @@ export async function GET(
         if (!account) {
             return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
         }
-        return NextResponse.json(account);
+        return NextResponse.json({
+            ...accountDto(account),
+            transactions: account.transactions.map(txDto),
+        });
     } catch (error) {
         console.error("Error fetching account:", error);
-        // Fallback for build time or DB errors
-        return NextResponse.json({
-            id,
-            name: "Cuenta (Fallback)",
-            type: "checking",
-            balance: 0,
-            currency: "MXN",
-            color: "#06b6d4",
-            icon: "wallet",
-            transactions: []
-        });
+        return NextResponse.json({ ok: false, error: "Error al cargar cuenta" }, { status: 500 });
     }
 }
 
@@ -46,13 +40,13 @@ export async function PUT(
             data: {
                 name: body.name,
                 type: body.type,
-                balance: body.balance !== undefined ? parseFloat(body.balance) : undefined,
+                balanceCents: body.balance !== undefined ? parseAmountInput(body.balance) : undefined,
                 currency: body.currency,
                 color: body.color,
                 icon: body.icon,
             },
         });
-        return NextResponse.json(account);
+        return NextResponse.json(accountDto(account));
     } catch (error) {
         console.error("Error updating account:", error);
         return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });

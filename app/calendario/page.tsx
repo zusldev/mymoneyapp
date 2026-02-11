@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCurrency } from "../lib/financialEngine";
 import Link from "next/link";
 import {
@@ -29,6 +29,9 @@ ChartJS.register(
 
 // Types
 import type { CalendarTransaction as Transaction, CalendarSubscription as Subscription } from "../lib/types";
+import { apiGet, normalizeApiError } from "../lib/api";
+import { subscriptionArraySchema, transactionArraySchema } from "../lib/schemas";
+import { toastError } from "../lib/toast";
 
 // Helpers
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -58,16 +61,27 @@ export default function CalendarioPage() {
 
     const fetchData = async () => {
         try {
-            const [txRes, subRes] = await Promise.all([
-                fetch("/api/transactions?limit=1000"), // Get enough history
-                fetch("/api/subscriptions")
+            const [txs, subs] = await Promise.all([
+                apiGet("/api/transactions?limit=1000", transactionArraySchema),
+                apiGet("/api/subscriptions", subscriptionArraySchema),
             ]);
-            const txs = await txRes.json();
-            const subs = await subRes.json();
-            setTransactions(txs);
-            setSubscriptions(subs);
+            setTransactions(
+                txs.map((tx) => ({
+                    ...tx,
+                    type: tx.type === "income" ? "income" : "expense",
+                    amount: tx.amount ?? (tx.amountCents ?? 0) / 100,
+                    merchant: tx.merchant ?? "",
+                }))
+            );
+            setSubscriptions(
+                subs.map((sub) => ({
+                    ...sub,
+                    amount: sub.amount ?? (sub.amountCents ?? 0) / 100,
+                }))
+            );
         } catch (e) {
-            console.error("Failed to fetch calendar data", e);
+            const failure = normalizeApiError(e);
+            toastError(failure.error);
         } finally {
             setLoading(false);
         }
@@ -75,46 +89,66 @@ export default function CalendarioPage() {
 
     useEffect(() => { fetchData(); }, []);
 
-    // Merge transactions and subscriptions into events
+    const txByDate = useMemo(() => {
+        const map: Record<string, Transaction[]> = {};
+        for (const tx of transactions) {
+            const key = tx.date.split("T")[0];
+            (map[key] ||= []).push(tx);
+        }
+        return map;
+    }, [transactions]);
+
+    const subsByDate = useMemo(() => {
+        const map: Record<string, Subscription[]> = {};
+        const monthStart = new Date(year, month, 1);
+        const monthEnd = new Date(year, month, daysInMonth);
+
+        for (const sub of subscriptions) {
+            if (!sub.active) continue;
+            const nextDate = new Date(sub.nextDate);
+
+            const pushDay = (date: Date) => {
+                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+                (map[key] ||= []).push(sub);
+            };
+
+            if (sub.frequency === "weekly") {
+                let cursor = new Date(nextDate);
+                while (cursor < monthStart) cursor.setDate(cursor.getDate() + 7);
+                while (cursor <= monthEnd) {
+                    pushDay(cursor);
+                    cursor = new Date(cursor);
+                    cursor.setDate(cursor.getDate() + 7);
+                }
+                continue;
+            }
+
+            if (sub.frequency === "monthly") {
+                const cursor = new Date(year, month, Math.min(nextDate.getDate(), daysInMonth));
+                if (cursor >= monthStart && cursor <= monthEnd && cursor >= new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate())) {
+                    pushDay(cursor);
+                }
+                continue;
+            }
+
+            if (sub.frequency === "yearly") {
+                if (nextDate.getMonth() === month && year >= nextDate.getFullYear()) {
+                    const cursor = new Date(year, month, Math.min(nextDate.getDate(), daysInMonth));
+                    pushDay(cursor);
+                }
+                continue;
+            }
+        }
+
+        return map;
+    }, [subscriptions, year, month, daysInMonth]);
+
     const getEventsForDay = (day: number) => {
         const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-
-        // Transactions on this exact date
-        const dayTxs = transactions.filter(t => t.date.split("T")[0] === dateStr);
-
-        // Subscription renewals — match by frequency
-        const daySubs = subscriptions.filter(s => {
-            if (!s.active) return false;
-            const nextD = new Date(s.nextDate);
-            const nextDay = nextD.getDate();
-            const nextMonth = nextD.getMonth();
-            const nextYear = nextD.getFullYear();
-
-            // Exact date match
-            if (nextDay === day && nextMonth === month && nextYear === year) return true;
-
-            // Monthly: same day-of-month, on or after the original nextDate
-            if (s.frequency === "monthly" && nextDay === day) {
-                const cellDate = new Date(year, month, day);
-                return cellDate >= nextD;
-            }
-
-            // Weekly: every 7 days from nextDate
-            if (s.frequency === "weekly") {
-                const cellDate = new Date(year, month, day);
-                const diff = Math.round((cellDate.getTime() - nextD.getTime()) / 86400000);
-                return diff >= 0 && diff % 7 === 0;
-            }
-
-            // Yearly: exact month and day
-            if (s.frequency === "yearly") {
-                return nextDay === day && nextMonth === month && year >= nextYear;
-            }
-
-            return false;
-        });
-
-        return { txs: dayTxs, subs: daySubs };
+        return {
+            txs: txByDate[dateStr] || [],
+            subs: subsByDate[dateStr] || [],
+        };
     };
 
     const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));

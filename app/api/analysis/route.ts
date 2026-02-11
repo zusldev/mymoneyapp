@@ -8,6 +8,9 @@ import {
     detectAnomalies,
     generateRecommendations,
 } from "@/app/lib/financialEngine";
+import { toMonthlyCents } from "@/app/lib/dates";
+import { goalDto, txDto } from "@/app/lib/serverMoney";
+import { toMajorUnits } from "@/app/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +35,9 @@ export async function GET() {
             ]);
 
         // Total balance across all accounts
-        const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
-        const totalDebt = creditCards.reduce((sum, c) => sum + c.balance, 0);
-        const netWorth = totalBalance - totalDebt;
+        const totalBalanceCents = accounts.reduce((sum, a) => sum + a.balanceCents, 0);
+        const totalDebtCents = creditCards.reduce((sum, c) => sum + c.balanceCents, 0);
+        const netWorthCents = totalBalanceCents - totalDebtCents;
 
         // Cash flow
         const cashFlow = calculateCashFlow(monthTransactions);
@@ -48,18 +51,18 @@ export async function GET() {
         // Projection
         const projection = projectEndOfMonth(
             monthTransactions.map((t) => ({
-                amount: t.amount,
+                amountCents: t.amountCents,
                 type: t.type,
                 date: t.date.toISOString(),
             })),
-            totalBalance,
+            totalBalanceCents,
         );
 
         // Anomalies
         const anomalies = detectAnomalies(
             monthTransactions.map((t) => ({
                 id: t.id,
-                amount: t.amount,
+                amountCents: t.amountCents,
                 merchant: t.merchant,
                 date: t.date.toISOString(),
                 category: t.category,
@@ -78,25 +81,22 @@ export async function GET() {
 
         // Monthly subscriptions cost
         const monthlySubsCost = subscriptions.reduce((sum, s) => {
-            if (s.frequency === "monthly") return sum + s.amount;
-            if (s.frequency === "yearly") return sum + s.amount / 12;
-            if (s.frequency === "weekly") return sum + s.amount * 4.33;
-            return sum + s.amount;
+            return sum + toMonthlyCents(s.amountCents, s.frequency as "weekly" | "biweekly" | "monthly" | "yearly");
         }, 0);
 
         // Expected monthly income
         const expectedMonthlyIncome = incomes.reduce((sum, i) => {
-            if (i.frequency === "monthly") return sum + i.amount;
-            if (i.frequency === "biweekly") return sum + i.amount * 2;
-            if (i.frequency === "weekly") return sum + i.amount * 4.33;
-            return sum + i.amount;
+            return sum + toMonthlyCents(i.amountCents, i.frequency as "weekly" | "biweekly" | "monthly" | "yearly");
         }, 0);
 
         return NextResponse.json({
             overview: {
-                totalBalance,
-                totalDebt,
-                netWorth,
+                totalBalanceCents,
+                totalDebtCents,
+                netWorthCents,
+                totalBalance: toMajorUnits(totalBalanceCents),
+                totalDebt: toMajorUnits(totalDebtCents),
+                netWorth: toMajorUnits(netWorthCents),
                 accountCount: accounts.length,
                 cardCount: creditCards.length,
             },
@@ -108,30 +108,32 @@ export async function GET() {
             recommendations,
             subscriptions: {
                 count: subscriptions.length,
-                monthlyTotal: Math.round(monthlySubsCost * 100) / 100,
+                monthlyTotalCents: monthlySubsCost,
+                monthlyTotal: toMajorUnits(monthlySubsCost),
             },
             income: {
-                expectedMonthly: Math.round(expectedMonthlyIncome * 100) / 100,
+                expectedMonthlyCents: expectedMonthlyIncome,
+                expectedMonthly: toMajorUnits(expectedMonthlyIncome),
             },
             goals: goals.map((g) => ({
-                ...g,
-                progress: g.targetAmount > 0 ? (g.currentAmount / g.targetAmount) * 100 : 0,
+                ...goalDto(g),
+                progress: g.targetAmountCents > 0 ? (g.currentAmountCents / g.targetAmountCents) * 100 : 0,
             })),
-            recentTransactions: monthTransactions.slice(0, 10),
+            recentTransactions: monthTransactions.slice(0, 10).map(txDto),
         });
     } catch (error) {
         console.error("Error generating analysis:", error);
         // Minimal fallback
         return NextResponse.json({
-            overview: { totalBalance: 0, totalDebt: 0, netWorth: 0, accountCount: 0, cardCount: 0 },
-            cashFlow: { totalIncome: 0, totalExpenses: 0, netBalance: 0, savingsRate: 0, isDeficit: false },
+            overview: { totalBalanceCents: 0, totalDebtCents: 0, netWorthCents: 0, totalBalance: 0, totalDebt: 0, netWorth: 0, accountCount: 0, cardCount: 0 },
+            cashFlow: { totalIncomeCents: 0, totalExpensesCents: 0, netBalanceCents: 0, totalIncome: 0, totalExpenses: 0, netBalance: 0, savingsRate: 0, isDeficit: false },
             categoryBreakdown: [],
             creditCards: [],
-            projection: { projectedBalance: 0, liquidityDays: 0, overdraftRisk: false, dailyBurnRate: 0, daysRemaining: 0 },
+            projection: { projectedBalanceCents: 0, dailyBurnRateCents: 0, projectedBalance: 0, liquidityDays: 0, overdraftRisk: false, dailyBurnRate: 0, daysRemaining: 0 },
             anomalies: [],
             recommendations: [],
-            subscriptions: { count: 0, monthlyTotal: 0 },
-            income: { expectedMonthly: 0 },
+            subscriptions: { count: 0, monthlyTotalCents: 0, monthlyTotal: 0 },
+            income: { expectedMonthlyCents: 0, expectedMonthly: 0 },
             goals: [],
             recentTransactions: []
         });

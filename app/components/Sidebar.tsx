@@ -38,6 +38,7 @@ export function Sidebar() {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                aria-label={item.label}
                                 className={`flex items-center px-4 py-2.5 rounded-xl group transition-all duration-200 relative ${isActive
                                     ? "bg-[#2badee]/10 text-[#2badee] font-semibold"
                                     : "text-slate-500 hover:text-[#2badee] hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-white/5 hover:translate-x-0.5"
@@ -58,6 +59,7 @@ export function Sidebar() {
             <div className="p-3 border-t border-slate-100 dark:border-slate-800">
                 <Link
                     href="#"
+                    aria-label="Configuración"
                     className="flex items-center px-4 py-2.5 text-slate-500 hover:text-[#2badee] hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-white/5 rounded-xl group transition-all duration-200"
                 >
                     <span className="material-icons-round text-[22px] group-hover:rotate-45 transition-transform duration-300">settings</span>
