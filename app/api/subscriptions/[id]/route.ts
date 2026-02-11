@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { parseAmountInput, subDto } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,18 +13,10 @@ export async function GET(
     try {
         const sub = await prisma.subscription.findUnique({ where: { id } });
         if (!sub) return NextResponse.json({ error: "Suscripción no encontrada" }, { status: 404 });
-        return NextResponse.json(sub);
+        return NextResponse.json(subDto(sub));
     } catch (error) {
         console.error("Error fetching subscription:", error);
-        return NextResponse.json({
-            id,
-            name: "Suscripción (Fallback)",
-            amount: 0,
-            frequency: "monthly",
-            active: true,
-            nextDate: new Date().toISOString(),
-            color: "#8b5cf6"
-        });
+        return NextResponse.json({ ok: false, error: "Error al cargar suscripción" }, { status: 500 });
     }
 }
 
@@ -38,7 +31,7 @@ export async function PUT(
             where: { id },
             data: {
                 name: body.name,
-                amount: body.amount !== undefined ? parseFloat(body.amount) : undefined,
+                amountCents: body.amount !== undefined ? parseAmountInput(body.amount) : undefined,
                 frequency: body.frequency,
                 category: body.category,
                 type: body.type,
@@ -50,7 +43,7 @@ export async function PUT(
                 creditCardId: body.creditCardId,
             },
         });
-        return NextResponse.json(sub);
+        return NextResponse.json(subDto(sub));
     } catch (error) {
         console.error("Error updating subscription:", error);
         return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });

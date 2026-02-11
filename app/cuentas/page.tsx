@@ -3,6 +3,9 @@ import { useEffect, useState, useMemo } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import type { AccountFull as Account } from "../lib/types";
+import { apiGet, apiPost, normalizeApiError } from "../lib/api";
+import { accountArraySchema } from "../lib/schemas";
+import { toastError, toastSuccess } from "../lib/toast";
 
 /* ═══ Constants ═══ */
 const T = { 300: "#5eead4", 400: "#2dd4bf", 500: "#14b8a6", 600: "#0d9488", 700: "#0f766e" };
@@ -13,33 +16,41 @@ const colorOptions = ["#14b8a6", "#0d9488", "#06b6d4", "#0891b2", "#8b5cf6", "#0
 
 /* ═══ Insights ═══ */
 interface Insight { icon: string; title: string; desc: string; severity: "info" | "warn" | "tip"; }
+const moneyValue = (major?: number, cents?: number) => major ?? (cents ?? 0) / 100;
+const accountBalance = (account: Pick<Account, "balance" | "balanceCents">) => moneyValue(account.balance, account.balanceCents);
+const recurringAmount = (item: { amount?: number; amountCents?: number }) => moneyValue(item.amount, item.amountCents);
 function generateInsights(accounts: Account[], total: number): Insight[] {
     const ins: Insight[] = [];
     if (accounts.length === 0 || total <= 0) return ins;
-    const maxPct = Math.max(...accounts.map(a => (a.balance / total) * 100));
-    const dom = accounts.find(a => (a.balance / total) * 100 === maxPct);
+    const maxPct = Math.max(...accounts.map(a => (accountBalance(a) / total) * 100));
+    const dom = accounts.find(a => (accountBalance(a) / total) * 100 === maxPct);
     if (maxPct > 70 && accounts.length > 1) ins.push({ icon: "warning", title: "Alta concentración", desc: `${Math.round(maxPct)}% en ${dom?.name}. Diversificar reduciría riesgo.`, severity: "warn" });
-    const ck = accounts.filter(a => a.type === "checking").reduce((s, a) => s + a.balance, 0);
-    const sv = accounts.filter(a => a.type === "savings").reduce((s, a) => s + a.balance, 0);
+    const ck = accounts.filter(a => a.type === "checking").reduce((s, a) => s + accountBalance(a), 0);
+    const sv = accounts.filter(a => a.type === "savings").reduce((s, a) => s + accountBalance(a), 0);
     if (ck > sv * 2.5 && sv > 0) ins.push({ icon: "lightbulb", title: "Efectivo sin rendimiento", desc: `${formatCurrency(ck)} en cheques vs ${formatCurrency(sv)} en ahorro.`, severity: "tip" });
-    for (const a of accounts) { if (a.balance < 1000 && a.type === "checking") ins.push({ icon: "error_outline", title: `Saldo bajo: ${a.name}`, desc: `Solo ${formatCurrency(a.balance)}. Riesgo de sobregiro.`, severity: "warn" }); }
+    for (const a of accounts) {
+        const balance = accountBalance(a);
+        if (balance < 1000 && a.type === "checking") ins.push({ icon: "error_outline", title: `Saldo bajo: ${a.name}`, desc: `Solo ${formatCurrency(balance)}. Riesgo de sobregiro.`, severity: "warn" });
+    }
     if (!accounts.find(a => a.type === "savings") && accounts.length > 1) ins.push({ icon: "savings", title: "Sin fondo de emergencia", desc: "Crear una cuenta de ahorro te protege.", severity: "tip" });
     if (maxPct < 50 && accounts.length >= 3) ins.push({ icon: "check_circle", title: "Buena diversificación", desc: "Tu dinero está bien distribuido.", severity: "info" });
     return ins.slice(0, 4);
 }
 
 /* ═══ Account Card ═══ */
-function AccountCard({ account, total, index, onEdit, onDelete }: {
+function AccountCard({ account, total, index, onEdit, onDelete, deletingId }: {
     account: Account; total: number; index: number;
     onEdit: (a: Account) => void; onDelete: (id: string) => void;
+    deletingId: string | null;
 }) {
-    const pct = total > 0 ? Math.max(0, (account.balance / total) * 100) : 0;
+    const balance = accountBalance(account);
+    const pct = total > 0 ? Math.max(0, (balance / total) * 100) : 0;
     const icon = typeIcons[account.type] || "account_balance_wallet";
     const lastTx = account.transactions?.[0];
     const subCount = account.subscriptions?.length || 0;
     const incomeCount = account.incomes?.length || 0;
-    const monthlySubCost = (account.subscriptions || []).reduce((s, sub) => s + (sub.frequency === "yearly" ? sub.amount / 12 : sub.amount), 0);
-    const monthlyIncome = (account.incomes || []).reduce((s, inc) => s + (inc.frequency === "yearly" ? inc.amount / 12 : inc.amount), 0);
+    const monthlySubCost = (account.subscriptions || []).reduce((s, sub) => s + (sub.frequency === "yearly" ? recurringAmount(sub) / 12 : recurringAmount(sub)), 0);
+    const monthlyIncome = (account.incomes || []).reduce((s, inc) => s + (inc.frequency === "yearly" ? recurringAmount(inc) / 12 : recurringAmount(inc)), 0);
 
     // Dynamic font scaling
     const fontScale = 1.35 + Math.min(pct / 30, 1) * 0.45;
@@ -66,7 +77,7 @@ function AccountCard({ account, total, index, onEdit, onDelete }: {
                     <button onClick={() => onEdit(account)} className="p-1.5 rounded-lg hover:bg-teal-500/10 text-slate-400 hover:text-teal-600 transition-colors">
                         <span className="material-icons-round text-[15px]">edit</span>
                     </button>
-                    <button onClick={() => onDelete(account.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors">
+                    <button disabled={deletingId === account.id} onClick={() => onDelete(account.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-60">
                         <span className="material-icons-round text-[15px]">delete_outline</span>
                     </button>
                 </div>
@@ -74,7 +85,7 @@ function AccountCard({ account, total, index, onEdit, onDelete }: {
 
             {/* Balance */}
             <p className="font-black tabular-nums text-slate-900 dark:text-white tracking-tight" style={{ fontSize: `${fontScale}rem` }}>
-                {formatCurrency(account.balance, account.currency)}
+                {formatCurrency(balance, account.currency)}
             </p>
 
             {/* Proportion */}
@@ -94,7 +105,7 @@ function AccountCard({ account, total, index, onEdit, onDelete }: {
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                         <span className="material-icons-round text-[13px]" style={{ color: T[400] }}>receipt</span>
                         <span className="truncate">{lastTx.merchant || "Transacción"}</span>
-                        <span className="ml-auto tabular-nums font-medium">{lastTx.type === "income" ? "+" : "-"}{formatCurrency(Math.abs(lastTx.amount))}</span>
+                        <span className="ml-auto tabular-nums font-medium">{lastTx.type === "income" ? "+" : "-"}{formatCurrency(Math.abs(recurringAmount(lastTx)))}</span>
                     </div>
                 )}
                 {subCount > 0 && (
@@ -128,21 +139,29 @@ export default function CuentasPage() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [form, setForm] = useState({ name: "", type: "checking", balance: "", currency: "MXN", color: "#14b8a6", icon: "" });
     const [simFrom, setSimFrom] = useState("");
     const [simTo, setSimTo] = useState("");
     const [simAmount, setSimAmount] = useState("");
 
     const fetchAccounts = () => {
-        fetch("/api/accounts").then(r => r.json()).then(d => setAccounts(Array.isArray(d) ? d : [])).catch(console.error).finally(() => setLoading(false));
+        apiGet("/api/accounts", accountArraySchema)
+            .then((data) => setAccounts(Array.isArray(data) ? (data as Account[]) : []))
+            .catch((error) => {
+                const failure = normalizeApiError(error);
+                toastError(failure.error);
+            })
+            .finally(() => setLoading(false));
     };
     useEffect(() => { fetchAccounts(); }, []);
 
-    const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-    const liquidBalance = accounts.filter(a => a.type !== "investment").reduce((s, a) => s + a.balance, 0);
-    const reservedBalance = accounts.filter(a => a.type === "savings" || a.type === "investment").reduce((s, a) => s + a.balance, 0);
+    const totalBalance = accounts.reduce((s, a) => s + accountBalance(a), 0);
+    const liquidBalance = accounts.filter(a => a.type !== "investment").reduce((s, a) => s + accountBalance(a), 0);
+    const reservedBalance = accounts.filter(a => a.type === "savings" || a.type === "investment").reduce((s, a) => s + accountBalance(a), 0);
     const insights = useMemo(() => generateInsights(accounts, totalBalance), [accounts, totalBalance]);
-    const hhi = accounts.length > 0 && totalBalance > 0 ? accounts.reduce((s, a) => s + Math.pow((a.balance / totalBalance) * 100, 2), 0) : 0;
+    const hhi = accounts.length > 0 && totalBalance > 0 ? accounts.reduce((s, a) => s + Math.pow((accountBalance(a) / totalBalance) * 100, 2), 0) : 0;
     const concentrationRisk = hhi > 6000 ? "Alto" : hhi > 3000 ? "Medio" : "Bajo";
     const concentrationColor = hhi > 6000 ? "text-red-500" : hhi > 3000 ? "text-amber-500" : "text-teal-500";
 
@@ -153,22 +172,44 @@ export default function CuentasPage() {
         const from = accounts.find(a => a.id === simFrom);
         const to = accounts.find(a => a.id === simTo);
         if (!from || !to) return null;
-        if (amt > from.balance) return { error: "Fondos insuficientes" };
-        return { from: { ...from, newBalance: from.balance - amt }, to: { ...to, newBalance: to.balance + amt }, amount: amt };
+        const fromBalance = accountBalance(from);
+        const toBalance = accountBalance(to);
+        if (amt > fromBalance) return { error: "Fondos insuficientes" };
+        return { from: { ...from, balance: fromBalance, newBalance: fromBalance - amt }, to: { ...to, balance: toBalance, newBalance: toBalance + amt }, amount: amt };
     }, [simFrom, simTo, simAmount, accounts]);
 
     const openCreate = () => { setEditingAccount(null); setForm({ name: "", type: "checking", balance: "", currency: "MXN", color: "#14b8a6", icon: "" }); setModalOpen(true); };
-    const openEdit = (a: Account) => { setEditingAccount(a); setForm({ name: a.name, type: a.type, balance: a.balance.toString(), currency: a.currency, color: a.color, icon: a.icon }); setModalOpen(true); };
+    const openEdit = (a: Account) => { setEditingAccount(a); setForm({ name: a.name, type: a.type, balance: accountBalance(a).toString(), currency: a.currency, color: a.color, icon: a.icon }); setModalOpen(true); };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const method = editingAccount ? "PUT" : "POST";
-        const url = editingAccount ? `/api/accounts/${editingAccount.id}` : "/api/accounts";
-        await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-        setModalOpen(false); fetchAccounts();
+        setIsSaving(true);
+        try {
+            const method = editingAccount ? "PUT" : "POST";
+            const url = editingAccount ? `/api/accounts/${editingAccount.id}` : "/api/accounts";
+            await apiPost(url, form, undefined, method);
+            toastSuccess(editingAccount ? "Cuenta actualizada" : "Cuenta creada");
+            setModalOpen(false);
+            fetchAccounts();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSaving(false);
+        }
     };
     const handleDelete = async (id: string) => {
         if (!confirm("¿Eliminar esta cuenta? Se borrarán todas sus transacciones.")) return;
-        await fetch(`/api/accounts/${id}`, { method: "DELETE" }); fetchAccounts();
+        setIsDeleting(id);
+        try {
+            await apiPost(`/api/accounts/${id}`, null, undefined, "DELETE");
+            toastSuccess("Cuenta eliminada");
+            fetchAccounts();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsDeleting(null);
+        }
     };
 
     if (loading) return (
@@ -221,8 +262,8 @@ export default function CuentasPage() {
                 {accounts.length > 0 && (
                     <div className="mt-6">
                         <div className="flex h-2 rounded-full overflow-hidden gap-px">
-                            {[...accounts].sort((a, b) => b.balance - a.balance).map((a, i) => {
-                                const pct = totalBalance > 0 ? Math.max(0, (a.balance / totalBalance) * 100) : 0;
+                            {[...accounts].sort((a, b) => accountBalance(b) - accountBalance(a)).map((a, i) => {
+                                const pct = totalBalance > 0 ? Math.max(0, (accountBalance(a) / totalBalance) * 100) : 0;
                                 return (
                                     <div key={a.id}
                                         className="rounded-full transition-all duration-1000 ease-out relative group/seg"
@@ -242,7 +283,7 @@ export default function CuentasPage() {
                         </div>
                         {/* Legend */}
                         <div className="flex flex-wrap gap-3 mt-3">
-                            {[...accounts].sort((a, b) => b.balance - a.balance).map((a, i) => (
+                            {[...accounts].sort((a, b) => accountBalance(b) - accountBalance(a)).map((a, i) => (
                                 <div key={a.id} className="flex items-center gap-1.5">
                                     <div className="w-2 h-2 rounded-full" style={{ background: `hsl(${170 + i * 28}, 55%, ${58 - i * 4}%)` }} />
                                     <span className="text-[10px] text-slate-500 dark:text-slate-400">{a.name}</span>
@@ -284,8 +325,8 @@ export default function CuentasPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {[...accounts].sort((a, b) => b.balance - a.balance).map((account, idx) => (
-                            <AccountCard key={account.id} account={account} total={totalBalance} index={idx} onEdit={openEdit} onDelete={handleDelete} />
+                        {[...accounts].sort((a, b) => accountBalance(b) - accountBalance(a)).map((account, idx) => (
+                            <AccountCard key={account.id} account={account} total={totalBalance} index={idx} onEdit={openEdit} onDelete={handleDelete} deletingId={isDeleting} />
                         ))}
                     </div>
                 )}
@@ -332,7 +373,7 @@ export default function CuentasPage() {
                                 <select value={simFrom} onChange={e => setSimFrom(e.target.value)}
                                     className="w-full px-3 py-2.5 bg-white/60 dark:bg-white/5 border border-slate-200/50 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400/40 backdrop-blur-sm transition-all">
                                     <option value="">Seleccionar</option>
-                                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}
+                                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(accountBalance(a))})</option>)}
                                 </select>
                             </div>
                             <div>
@@ -340,7 +381,7 @@ export default function CuentasPage() {
                                 <select value={simTo} onChange={e => setSimTo(e.target.value)}
                                     className="w-full px-3 py-2.5 bg-white/60 dark:bg-white/5 border border-slate-200/50 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400/40 backdrop-blur-sm transition-all">
                                     <option value="">Seleccionar</option>
-                                    {accounts.filter(a => a.id !== simFrom).map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}
+                                    {accounts.filter(a => a.id !== simFrom).map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(accountBalance(a))})</option>)}
                                 </select>
                             </div>
                             <div>
@@ -415,9 +456,9 @@ export default function CuentasPage() {
                         </div>
                     </div>
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
+                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
                         <button type="submit" className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.97]" style={{ background: T[500] }}>
-                            {editingAccount ? "Guardar" : "Crear"}
+                            {isSaving ? "Guardando..." : editingAccount ? "Guardar" : "Crear"}
                         </button>
                     </div>
                 </form>

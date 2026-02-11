@@ -25,6 +25,7 @@ export function MobileNav() {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                aria-label={item.label}
                                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 active:scale-90 ${isActive
                                     ? "text-[#2badee]"
                                     : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"

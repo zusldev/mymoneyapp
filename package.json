@@ -7,14 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "echo \"No tests specified\" && exit 0",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "prisma generate",
-    "screenshots": "npx tsx scripts/release-screenshots.ts"
+    "screenshots": "npx tsx scripts/release-screenshots.ts",
+    "migrate:money": "node --experimental-strip-types scripts/migrate-money-to-cents.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "@prisma/client-runtime-utils": "^7.3.0",
     "chart.js": "^4.5.1",
+    "decimal.js": "^10.6.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "openai": "^6.19.0",
@@ -22,7 +26,8 @@
     "prisma": "^7.3.0",
     "react": "19.2.3",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -36,6 +41,7 @@
     "eslint-config-next": "16.1.6",
     "playwright": "^1.58.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

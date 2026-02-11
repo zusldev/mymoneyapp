@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { accountDto, incomeDto, parseAmountInput, subDto, txDto } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -9,16 +10,22 @@ export async function GET() {
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { transactions: true } },
-                subscriptions: { where: { active: true }, select: { id: true, name: true, amount: true, frequency: true, icon: true } },
-                incomes: { select: { id: true, name: true, amount: true, frequency: true, icon: true } },
-                transactions: { orderBy: { date: "desc" }, take: 3, select: { id: true, merchant: true, amount: true, type: true, date: true, category: true } },
+                subscriptions: { where: { active: true }, select: { id: true, name: true, amountCents: true, frequency: true, icon: true } },
+                incomes: { select: { id: true, name: true, amountCents: true, frequency: true, icon: true } },
+                transactions: { orderBy: { date: "desc" }, take: 3, select: { id: true, merchant: true, amountCents: true, type: true, date: true, category: true } },
             },
         });
-        return NextResponse.json(accounts);
+        return NextResponse.json(
+            accounts.map((account) => ({
+                ...accountDto(account),
+                subscriptions: account.subscriptions.map(subDto),
+                incomes: account.incomes.map(incomeDto),
+                transactions: account.transactions.map(txDto),
+            })),
+        );
     } catch (error) {
         console.error("Error fetching accounts:", error);
-        // Fallback for build time
-        return NextResponse.json([]);
+        return NextResponse.json({ ok: false, error: "Error al cargar cuentas" }, { status: 500 });
     }
 }
 
@@ -29,13 +36,13 @@ export async function POST(request: NextRequest) {
             data: {
                 name: body.name,
                 type: body.type || "checking",
-                balance: parseFloat(body.balance) || 0,
+                balanceCents: parseAmountInput(body.balance ?? 0),
                 currency: body.currency || "MXN",
                 color: body.color || "#06b6d4",
                 icon: body.icon || "wallet",
             },
         });
-        return NextResponse.json(account, { status: 201 });
+        return NextResponse.json(accountDto(account), { status: 201 });
     } catch (error) {
         console.error("Error creating account:", error);
         return NextResponse.json({ error: "Error al crear cuenta" }, { status: 500 });

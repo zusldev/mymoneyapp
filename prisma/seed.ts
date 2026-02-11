@@ -4,6 +4,7 @@ import "dotenv/config";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
+const toCents = (value: number) => Math.round(value * 100);
 
 async function seed() {
     console.log("🌱 Seeding database...\n");
@@ -19,25 +20,25 @@ async function seed() {
 
     // ─── Accounts ───
     const bbva = await prisma.account.create({
-        data: { name: "BBVA Nómina", type: "checking", balance: 28450.75, currency: "MXN", color: "#3b82f6", icon: "landmark" },
+        data: { name: "BBVA Nómina", type: "checking", balanceCents: toCents(28450.75), currency: "MXN", color: "#3b82f6", icon: "landmark" },
     });
     const nu = await prisma.account.create({
-        data: { name: "Nu Ahorro", type: "savings", balance: 65000.0, currency: "MXN", color: "#8b5cf6", icon: "piggy-bank" },
+        data: { name: "Nu Ahorro", type: "savings", balanceCents: toCents(65000.0), currency: "MXN", color: "#8b5cf6", icon: "piggy-bank" },
     });
     const cash = await prisma.account.create({
-        data: { name: "Efectivo", type: "cash", balance: 2300.0, currency: "MXN", color: "#06d6a0", icon: "banknote" },
+        data: { name: "Efectivo", type: "cash", balanceCents: toCents(2300.0), currency: "MXN", color: "#06d6a0", icon: "banknote" },
     });
     console.log("✅ 3 cuentas creadas");
 
     // ─── Credit Cards ───
     const amex = await prisma.creditCard.create({
-        data: { name: "AMEX Gold", bank: "American Express", lastFour: "4821", creditLimit: 85000, balance: 12450.30, cutDate: 15, payDate: 5, apr: 36.5, color: "#f59e0b" },
+        data: { name: "AMEX Gold", bank: "American Express", lastFour: "4821", creditLimitCents: toCents(85000), balanceCents: toCents(12450.30), cutDate: 15, payDate: 5, apr: 36.5, color: "#f59e0b" },
     });
     const bbvaCard = await prisma.creditCard.create({
-        data: { name: "BBVA Platinum", bank: "BBVA", lastFour: "7392", creditLimit: 120000, balance: 34200.0, cutDate: 22, payDate: 12, apr: 28.9, color: "#3b82f6" },
+        data: { name: "BBVA Platinum", bank: "BBVA", lastFour: "7392", creditLimitCents: toCents(120000), balanceCents: toCents(34200.0), cutDate: 22, payDate: 12, apr: 28.9, color: "#3b82f6" },
     });
     const nuCard = await prisma.creditCard.create({
-        data: { name: "Nu Card", bank: "Nu", lastFour: "1056", creditLimit: 45000, balance: 8900.50, cutDate: 1, payDate: 20, apr: 42.0, color: "#8b5cf6" },
+        data: { name: "Nu Card", bank: "Nu", lastFour: "1056", creditLimitCents: toCents(45000), balanceCents: toCents(8900.50), cutDate: 1, payDate: 20, apr: 42.0, color: "#8b5cf6" },
     });
     console.log("✅ 3 tarjetas creadas");
 
@@ -99,7 +100,7 @@ async function seed() {
         date.setDate(date.getDate() - tx.daysAgo);
         await prisma.transaction.create({
             data: {
-                amount: tx.amount, type: tx.type, date,
+                amountCents: toCents(tx.amount), type: tx.type, date,
                 merchant: tx.merchant, category: tx.category,
                 accountId: tx.accountId || null,
                 creditCardId: tx.creditCardId || null,
@@ -123,29 +124,29 @@ async function seed() {
         const nextDate = new Date(now);
         nextDate.setDate(nextDate.getDate() + sub.daysUntil);
         await prisma.subscription.create({
-            data: { name: sub.name, amount: sub.amount, frequency: sub.frequency, category: sub.category, color: sub.color, nextDate, active: true },
+            data: { name: sub.name, amountCents: toCents(sub.amount), frequency: sub.frequency, category: sub.category, color: sub.color, nextDate, active: true },
         });
     }
     console.log(`✅ ${subData.length} suscripciones creadas`);
 
     // ─── Incomes ───
     await prisma.income.create({
-        data: { name: "Salario Empresa XYZ", amount: 32000, frequency: "biweekly", source: "Empresa XYZ S.A. de C.V.", nextDate: new Date(now.getFullYear(), now.getMonth(), 15), active: true },
+        data: { name: "Salario Empresa XYZ", amountCents: toCents(32000), frequency: "biweekly", source: "Empresa XYZ S.A. de C.V.", nextDate: new Date(now.getFullYear(), now.getMonth(), 15), active: true },
     });
     await prisma.income.create({
-        data: { name: "Freelance Desarrollo", amount: 5500, frequency: "monthly", source: "Clientes independientes", nextDate: new Date(now.getFullYear(), now.getMonth() + 1, 1), active: true },
+        data: { name: "Freelance Desarrollo", amountCents: toCents(5500), frequency: "monthly", source: "Clientes independientes", nextDate: new Date(now.getFullYear(), now.getMonth() + 1, 1), active: true },
     });
     console.log("✅ 2 ingresos creados");
 
     // ─── Financial Goals ───
     await prisma.financialGoal.create({
-        data: { name: "Fondo de Emergencia", targetAmount: 100000, currentAmount: 65000, deadline: new Date(2026, 11, 31), priority: "high", color: "#06d6a0", icon: "shield" },
+        data: { name: "Fondo de Emergencia", targetAmountCents: toCents(100000), currentAmountCents: toCents(65000), deadline: new Date(2026, 11, 31), priority: "high", color: "#06d6a0", icon: "shield" },
     });
     await prisma.financialGoal.create({
-        data: { name: "Viaje a Europa", targetAmount: 80000, currentAmount: 22000, deadline: new Date(2026, 7, 15), priority: "medium", color: "#3b82f6", icon: "plane" },
+        data: { name: "Viaje a Europa", targetAmountCents: toCents(80000), currentAmountCents: toCents(22000), deadline: new Date(2026, 7, 15), priority: "medium", color: "#3b82f6", icon: "plane" },
     });
     await prisma.financialGoal.create({
-        data: { name: "MacBook Pro", targetAmount: 45000, currentAmount: 12500, deadline: new Date(2026, 5, 1), priority: "low", color: "#8b5cf6", icon: "laptop" },
+        data: { name: "MacBook Pro", targetAmountCents: toCents(45000), currentAmountCents: toCents(12500), deadline: new Date(2026, 5, 1), priority: "low", color: "#8b5cf6", icon: "laptop" },
     });
     console.log("✅ 3 metas creadas");
 

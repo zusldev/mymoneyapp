@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { goalDto, parseAmountInput } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export async function GET() {
         const goals = await prisma.financialGoal.findMany({
             orderBy: { deadline: "asc" },
         });
-        return NextResponse.json(goals);
+        return NextResponse.json(goals.map(goalDto));
     } catch (error) {
         console.error("Error fetching goals:", error);
         return NextResponse.json({ error: "Error" }, { status: 500 });
@@ -21,15 +22,15 @@ export async function POST(request: NextRequest) {
         const goal = await prisma.financialGoal.create({
             data: {
                 name: body.name,
-                targetAmount: parseFloat(body.targetAmount),
-                currentAmount: parseFloat(body.currentAmount) || 0,
+                targetAmountCents: parseAmountInput(body.targetAmount),
+                currentAmountCents: parseAmountInput(body.currentAmount ?? 0),
                 deadline: new Date(body.deadline),
                 priority: body.priority || "medium",
                 color: body.color || "#10b981",
                 icon: body.icon || "target",
             },
         });
-        return NextResponse.json(goal, { status: 201 });
+        return NextResponse.json(goalDto(goal), { status: 201 });
     } catch (error) {
         console.error("Error creating goal:", error);
         return NextResponse.json({ error: "Error al crear meta" }, { status: 500 });
