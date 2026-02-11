@@ -17,11 +17,18 @@ function createPrismaClient(): PrismaClient {
         throw new Error("DATABASE_URL is not defined");
     }
 
+    const parsedPoolMax = Number.parseInt(process.env.PG_POOL_MAX ?? "1", 10);
+    const poolMax = Number.isFinite(parsedPoolMax) && parsedPoolMax > 0 ? parsedPoolMax : 1;
+
     // Reuse pool across hot-reloads to avoid exhausting Supabase pooler
     if (!globalForPrisma.pool) {
         globalForPrisma.pool = new Pool({
             connectionString,
-            max: 3, // Small pool — Supabase pooler has strict limits
+            // Serverless environments open many concurrent instances.
+            // Keep per-instance pool tiny to avoid Supabase session pool exhaustion.
+            max: poolMax,
+            idleTimeoutMillis: 10_000,
+            connectionTimeoutMillis: 10_000,
             ssl: { rejectUnauthorized: false },
         });
     }
