@@ -7,12 +7,14 @@ import type { AnalysisData } from "./lib/types";
 import { apiGet, normalizeApiError } from "./lib/api";
 import { subscriptionArraySchema } from "./lib/schemas";
 import { toastError } from "./lib/toast";
+import { parse, percentages, toMajorUnits } from "./lib/money";
 
 // Subscription type for upcoming payments
 interface UpcomingSub {
   id: string;
   name: string;
-  amount: number;
+  amount?: number;
+  amountCents?: number;
   category: string;
   nextDate: string;
   color: string;
@@ -61,10 +63,16 @@ export default function Dashboard() {
     );
   }
 
+  const totalBalanceCents = data.overview.totalBalanceCents ?? parse(data.overview.totalBalance);
+  const totalDebtCents = data.overview.totalDebtCents ?? parse(data.overview.totalDebt);
+  const netBalanceCents = data.cashFlow.netBalanceCents ?? parse(data.cashFlow.netBalance);
+  const totalIncomeCents = data.cashFlow.totalIncomeCents ?? parse(data.cashFlow.totalIncome);
+  const totalExpensesCents = data.cashFlow.totalExpensesCents ?? parse(data.cashFlow.totalExpenses);
+
   // Compute health score (0-100) based on savings rate, debt ratio, goals progress
   const savingsScore = Math.min(data.cashFlow.savingsRate * 2, 40); // max 40 pts
-  const debtScore = data.overview.totalBalance > 0
-    ? Math.max(0, 30 - (data.overview.totalDebt / data.overview.totalBalance) * 30)
+  const debtScore = totalBalanceCents > 0
+    ? Math.max(0, 30 - (percentages(totalDebtCents, totalBalanceCents, { clamp: false, decimals: 2 }) / 100) * 30)
     : 15; // max 30 pts
   const goalsScore = data.goals.length > 0
     ? (data.goals.reduce((sum, g) => sum + g.progress, 0) / data.goals.length) * 0.3
@@ -73,9 +81,9 @@ export default function Dashboard() {
   const healthLabel = healthScore >= 80 ? "Excelente" : healthScore >= 60 ? "Buena" : healthScore >= 40 ? "Regular" : "Necesita Atención";
 
   // Budget data — income as limit, expenses as spent
-  const budgetLimit = data.cashFlow.totalIncome || 1;
-  const budgetSpent = data.cashFlow.totalExpenses;
-  const budgetPct = Math.min((budgetSpent / budgetLimit) * 100, 100);
+  const budgetLimitCents = Math.max(1, totalIncomeCents);
+  const budgetSpentCents = totalExpensesCents;
+  const budgetPct = percentages(budgetSpentCents, budgetLimitCents, { clamp: true, decimals: 0 });
 
   // Top 3 categories for budget breakdown
   const topCats = data.categoryBreakdown.slice(0, 3);
@@ -83,18 +91,19 @@ export default function Dashboard() {
   // Spending mix for donut — group into Needs/Wants/Savings
   const needsCats = ["hogar", "supermercado", "servicios", "salud", "transporte"];
   const wantsCats = ["comida", "entretenimiento", "compras", "viajes", "suscripciones"];
-  const totalExpenses = data.cashFlow.totalExpenses || 1;
+  const totalExpenses = toMajorUnits(Math.max(1, totalExpensesCents));
 
-  const needsTotal = data.categoryBreakdown
+  const needsTotalCents = data.categoryBreakdown
     .filter((c) => needsCats.includes(c.category))
-    .reduce((s, c) => s + c.total, 0);
-  const wantsTotal = data.categoryBreakdown
+    .reduce((s, c) => s + (c.totalCents ?? parse(c.total)), 0);
+  const wantsTotalCents = data.categoryBreakdown
     .filter((c) => wantsCats.includes(c.category))
-    .reduce((s, c) => s + c.total, 0);
-  const savingsTotal = Math.max(0, data.cashFlow.netBalance);
+    .reduce((s, c) => s + (c.totalCents ?? parse(c.total)), 0);
+  const savingsTotalCents = Math.max(0, netBalanceCents);
+  const mixTotalCents = Math.max(1, needsTotalCents + wantsTotalCents + savingsTotalCents);
 
-  const needsPct = Math.round((needsTotal / (needsTotal + wantsTotal + savingsTotal || 1)) * 100);
-  const wantsPct = Math.round((wantsTotal / (needsTotal + wantsTotal + savingsTotal || 1)) * 100);
+  const needsPct = percentages(needsTotalCents, mixTotalCents, { clamp: true, decimals: 0 });
+  const wantsPct = percentages(wantsTotalCents, mixTotalCents, { clamp: true, decimals: 0 });
   const savingsPct = 100 - needsPct - wantsPct;
 
   // Savings change indicator
@@ -202,7 +211,7 @@ export default function Dashboard() {
             </div>
             <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Balance Total</span>
             <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1 tabular-nums">
-              {formatCurrency(data.overview.totalBalance)}
+              {formatCurrency(toMajorUnits(totalBalanceCents))}
             </h3>
           </div>
 
@@ -242,8 +251,8 @@ export default function Dashboard() {
           {/* Main Budget Bar */}
           <div className="mb-8">
             <div className="flex justify-between text-sm font-medium mb-2">
-              <span className="text-slate-700 dark:text-slate-200">{formatCurrency(budgetSpent)} Gastado</span>
-              <span className="text-slate-500">{formatCurrency(budgetLimit)} Ingreso</span>
+              <span className="text-slate-700 dark:text-slate-200">{formatCurrency(toMajorUnits(budgetSpentCents))} Gastado</span>
+              <span className="text-slate-500">{formatCurrency(toMajorUnits(budgetLimitCents))} Ingreso</span>
             </div>
             <div className="h-4 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
@@ -262,7 +271,7 @@ export default function Dashboard() {
                   <span className="text-xs font-semibold text-slate-500 uppercase">{cat.label}</span>
                 </div>
                 <div className="text-lg font-bold text-slate-800 dark:text-white tabular-nums">
-                  {formatCurrency(cat.total)}
+                  {formatCurrency(toMajorUnits(cat.totalCents ?? parse(cat.total)))}
                 </div>
                 <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-2">
                   <div
@@ -361,7 +370,7 @@ export default function Dashboard() {
                   <div className="flex justify-between items-center mt-2">
                     <p className="text-sm text-slate-500">{catInfo.label}</p>
                     <span className="font-bold text-slate-800 dark:text-white tabular-nums">
-                      {formatCurrency(sub.amount)}
+                      {formatCurrency(toMajorUnits(sub.amountCents ?? parse(sub.amount ?? 0)))}
                     </span>
                   </div>
                 </div>

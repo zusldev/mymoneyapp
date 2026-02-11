@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { percentages } from "./money.ts";
 import type { AmountCents } from "./money.ts";
 
@@ -19,7 +20,7 @@ export function accountDistribution(accounts: Array<{ id: string; balanceCents: 
 
   return accounts.map((item) => ({
     id: item.id,
-    pct: clampPercentage((item.balanceCents / total) * 100),
+    pct: percentages(item.balanceCents, total, { clamp: true, decimals: 2 }),
   }));
 }
 
@@ -30,7 +31,10 @@ export function projectEndOfMonthCents(params: {
   daysRemaining: number;
 }) {
   const safeDaysPassed = Math.max(1, params.daysPassed);
-  const dailyBurnCents = Math.round(params.monthlyExpenseCents / safeDaysPassed);
+  const dailyBurnCents = new Decimal(params.monthlyExpenseCents)
+    .div(safeDaysPassed)
+    .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
+    .toNumber();
   const projectedRemainingExpenseCents = dailyBurnCents * Math.max(0, params.daysRemaining);
   const projectedBalanceCents = params.currentBalanceCents - projectedRemainingExpenseCents;
 

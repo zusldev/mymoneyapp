@@ -1,7 +1,15 @@
+import Decimal from "decimal.js";
 import { sum } from "./money.ts";
 import type { AmountCents } from "./money.ts";
 
 export type RecurrenceFrequency = "weekly" | "biweekly" | "monthly" | "yearly";
+
+const MONTHS_PER_YEAR = new Decimal(12);
+const WEEKS_PER_YEAR = new Decimal(52);
+
+function roundCents(value: Decimal): AmountCents {
+  return value.toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+}
 
 function startOfUtcDay(date: Date): Date {
   return new Date(
@@ -76,9 +84,11 @@ export function toMonthlyCents(
 ): AmountCents {
   switch (frequency) {
     case "yearly":
-      return Math.round(amountCents / 12);
+      return roundCents(new Decimal(amountCents).div(MONTHS_PER_YEAR));
     case "weekly":
-      return Math.round((amountCents * 52) / 12);
+      return roundCents(
+        new Decimal(amountCents).mul(WEEKS_PER_YEAR).div(MONTHS_PER_YEAR),
+      );
     case "biweekly":
       return amountCents * 2;
     case "monthly":

@@ -29,3 +29,14 @@
 - **What happened**: A DB diagnostic command failed with syntax error because `prisma.$disconnect()` was interpreted incorrectly by PowerShell.
 - **Root cause**: Missing escape for `$` in inline `node -e` command under `pwsh`.
 - **Rule**: In PowerShell one-liners, escape `$` in JavaScript snippets (e.g., `prisma.`$disconnect()`) to avoid misleading command failures.
+
+### 2026-02-11 — Legacy NOT NULL mirror columns broke cents-only writes
+- **What happened**: Creating incomes/subscriptions/transactions failed with Prisma `P2011` because DB columns `amount` were still `NOT NULL` while app writes only `amount_cents`.
+- **Root cause**: Money migration backfilled cents but left legacy major-unit columns with restrictive constraints; schema and DB were not validated together at create-time.
+- **Rule**: During cents migrations, legacy mirror columns must either be made nullable or be deterministically populated in every write path before switching production writes to `*_cents` only.
+
+### 2026-02-11 — Prisma baseline drift after deleting migrations
+
+- **What happened**: Deleted migrations folder while database already contained data. Prisma detected drift and attempted reset.
+- **Root cause**: Migration history did not match existing database state.
+- **Rule**: Never delete migrations in a live project. If history is lost, create a baseline using `prisma migrate diff` and mark it applied with `prisma migrate resolve`.

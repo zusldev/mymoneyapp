@@ -1,5 +1,6 @@
 "use client";
 import { memo, useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import { CATEGORIES, CATEGORY_KEYS, CategoryKey, getCatIcon, getCatColors } from "../lib/categories";
@@ -7,6 +8,7 @@ import type { Transaction, Account, CreditCard, TransactionAnomaly as Anomaly } 
 import { apiGet, apiPost, normalizeApiError } from "../lib/api";
 import { accountArraySchema, creditCardArraySchema, transactionArraySchema } from "../lib/schemas";
 import { toastError, toastSuccess } from "../lib/toast";
+import { parse, percentages, toMajorUnits } from "../lib/money";
 
 /* ═══ TransactionItem Component ═══ */
 const TransactionItem = memo(function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategory, deletingId, syncingId }: {
@@ -57,7 +59,12 @@ const TransactionItem = memo(function TransactionItem({ tx, anomalies: txAnomali
                     <span className="w-0.5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600" />
                     {/* Clickable category */}
                     <div className="relative" ref={catPickerRef}>
-                        <button disabled={syncingId === tx.id} onClick={() => setShowCatPicker(!showCatPicker)} className="hover:text-[#2badee] transition-colors flex items-center gap-0.5 disabled:opacity-60">
+                        <button
+                            aria-label={`Editar categoría de ${tx.merchant || cat.label}`}
+                            disabled={syncingId === tx.id}
+                            onClick={() => setShowCatPicker(!showCatPicker)}
+                            className="touch-target focus-ring hover:text-[#2badee] transition-colors flex items-center gap-0.5 disabled:opacity-60"
+                        >
                             {cat.label}
                             <span className="material-icons-round text-[10px] opacity-0 group-hover:opacity-100">edit</span>
                         </button>
@@ -96,10 +103,14 @@ const TransactionItem = memo(function TransactionItem({ tx, anomalies: txAnomali
             {/* Amount + Actions */}
             <div className="text-right shrink-0">
                 <p className={`text-base font-bold tabular-nums ${isIncome ? "text-emerald-600" : "text-slate-900 dark:text-white"}`}>
-                    {isIncome ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
+                    {isIncome ? "+" : "-"}{formatCurrency(toMajorUnits(Math.abs(amountCentsOf(tx))))}
                 </p>
-                <button disabled={deletingId === tx.id} onClick={e => { e.stopPropagation(); onDelete(tx.id); }}
-                    className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all mt-1 disabled:opacity-60">
+                <button
+                    aria-label={`Eliminar transacción ${tx.merchant || cat.label}`}
+                    disabled={deletingId === tx.id}
+                    onClick={e => { e.stopPropagation(); onDelete(tx.id); }}
+                    className="touch-target focus-ring p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all mt-1 disabled:opacity-60"
+                >
                     <span className="material-icons-round text-sm">delete_outline</span>
                 </button>
             </div>
@@ -113,6 +124,12 @@ function groupByDate(txs: Transaction[]): Record<string, Transaction[]> {
     for (const t of txs) { const k = t.date.split("T")[0]; (g[k] ||= []).push(t); }
     return g;
 }
+
+function amountCentsOf(value: { amountCents?: number; amount?: number }) {
+    if (typeof value.amountCents === "number") return value.amountCents;
+    return parse(value.amount ?? 0);
+}
+
 function formatDateLabel(ds: string) {
     const d = new Date(ds + "T12:00:00"), now = new Date(), y = new Date();
     y.setDate(now.getDate() - 1);
@@ -124,14 +141,15 @@ function formatDateLabel(ds: string) {
 function detectAnomalies(txs: Transaction[]): Anomaly[] {
     const a: Anomaly[] = [];
     const expenses = txs.filter(t => t.type === "expense");
-    const amounts = expenses.map(t => Math.abs(t.amount));
+    const amounts = expenses.map(t => Math.abs(amountCentsOf(t)));
     const avg = amounts.length > 3 ? amounts.reduce((s, x) => s + x, 0) / amounts.length : 0;
 
     // Spending spikes (>3x average)
     if (avg > 0) {
         for (const t of expenses) {
-            if (Math.abs(t.amount) > avg * 3) {
-                a.push({ txId: t.id, type: "spike", label: `Gasto inusual: ${Math.round(Math.abs(t.amount) / avg)}x el promedio`, severity: "warn" });
+            const txCents = Math.abs(amountCentsOf(t));
+            if (txCents > avg * 3) {
+                a.push({ txId: t.id, type: "spike", label: `Gasto inusual: ${Math.round(txCents / avg)}x el promedio`, severity: "warn" });
             }
         }
     }
@@ -140,7 +158,7 @@ function detectAnomalies(txs: Transaction[]): Anomaly[] {
     for (let i = 0; i < expenses.length; i++) {
         for (let j = i + 1; j < Math.min(i + 10, expenses.length); j++) {
             const a1 = expenses[i], b = expenses[j];
-            if (a1.merchant && b.merchant && a1.merchant === b.merchant && Math.abs(a1.amount - b.amount) < 0.01) {
+            if (a1.merchant && b.merchant && a1.merchant === b.merchant && Math.abs(amountCentsOf(a1) - amountCentsOf(b)) <= 1) {
                 const diff = Math.abs(new Date(a1.date).getTime() - new Date(b.date).getTime()) / 86400000;
                 if (diff <= 2) a.push({ txId: a1.id, type: "duplicate", label: "Posible cargo duplicado", severity: "danger" });
             }
@@ -149,7 +167,7 @@ function detectAnomalies(txs: Transaction[]): Anomaly[] {
 
     // Fees / interest
     for (const t of txs) {
-        if (t.isFeeOrInterest && Math.abs(t.amount) > 200) {
+        if (t.isFeeOrInterest && Math.abs(amountCentsOf(t)) > parse(200)) {
             a.push({ txId: t.id, type: "fee", label: "Comisión/interés alto", severity: "warn" });
         }
     }
@@ -171,6 +189,7 @@ export default function TransaccionesPage() {
     const [showAnalysis, setShowAnalysis] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState<string | null>(null);
     const [form, setForm] = useState({
         amount: "", type: "expense", date: new Date().toISOString().split("T")[0],
@@ -220,33 +239,40 @@ export default function TransaccionesPage() {
             setIsSaving(false);
         }
     };
-    const handleDelete = async (id: string) => {
-        if (!confirm("¿Eliminar esta transacción?")) return;
+    const requestDelete = useCallback((id: string) => {
+        setPendingDeleteId(id);
+    }, []);
+
+    const handleDelete = useCallback(async () => {
+        if (!pendingDeleteId) return;
+        const id = pendingDeleteId;
         setIsDeleting(id);
         try {
             await apiPost(`/api/transactions/${id}`, null, undefined, "DELETE");
             toastSuccess("Transacción eliminada");
-            fetchData();
+            await fetchData();
         } catch (error) {
             const failure = normalizeApiError(error);
             toastError(failure.error);
         } finally {
             setIsDeleting(null);
+            setPendingDeleteId(null);
         }
-    };
-    const quickUpdateCategory = async (id: string, category: string) => {
+    }, [pendingDeleteId, fetchData]);
+
+    const quickUpdateCategory = useCallback(async (id: string, category: string) => {
         setIsSyncing(id);
         try {
             await apiPost(`/api/transactions/${id}`, { category }, undefined, "PUT");
             toastSuccess("Categoría actualizada");
-            fetchData();
+            await fetchData();
         } catch (error) {
             const failure = normalizeApiError(error);
             toastError(failure.error);
         } finally {
             setIsSyncing(null);
         }
-    };
+    }, [fetchData]);
 
     /* ── Filtering ── */
     const filtered = useMemo(() => transactions.filter(t =>
@@ -256,35 +282,53 @@ export default function TransaccionesPage() {
     ), [transactions, searchQuery]);
 
     /* ── Computed analytics ── */
-    const totalIncome = filtered.filter(t => t.type === "income").reduce((s, t) => s + Math.abs(t.amount), 0);
-    const totalExpenses = filtered.filter(t => t.type === "expense").reduce((s, t) => s + Math.abs(t.amount), 0);
+    const { totalIncomeCents, totalExpensesCents } = useMemo(() => {
+        let income = 0;
+        let expenses = 0;
+        for (const tx of filtered) {
+            const value = Math.abs(amountCentsOf(tx));
+            if (tx.type === "income") income += value;
+            if (tx.type === "expense") expenses += value;
+        }
+        return { totalIncomeCents: income, totalExpensesCents: expenses };
+    }, [filtered]);
+    const totalIncome = toMajorUnits(totalIncomeCents);
+    const totalExpenses = toMajorUnits(totalExpensesCents);
     const netBalance = totalIncome - totalExpenses;
-    const spentPct = totalIncome > 0 ? Math.min(Math.round((totalExpenses / totalIncome) * 100), 100) : 0;
+    const spentPct = percentages(totalExpensesCents, totalIncomeCents, { clamp: true, decimals: 0 });
 
     /* Category breakdown */
     const catBreakdown = useMemo(() => {
-        const map: Record<string, { total: number; count: number }> = {};
+        const map: Record<string, { totalCents: number; count: number }> = {};
         for (const t of filtered.filter(t => t.type === "expense")) {
             const c = t.category || "otros";
-            if (!map[c]) map[c] = { total: 0, count: 0 };
-            map[c].total += Math.abs(t.amount);
+            if (!map[c]) map[c] = { totalCents: 0, count: 0 };
+            map[c].totalCents += Math.abs(amountCentsOf(t));
             map[c].count++;
         }
         return Object.entries(map)
-            .map(([cat, d]) => ({ cat, ...d, pct: totalExpenses > 0 ? Math.round((d.total / totalExpenses) * 100) : 0 }))
-            .sort((a, b) => b.total - a.total);
-    }, [filtered, totalExpenses]);
+            .map(([cat, d]) => ({
+                cat,
+                ...d,
+                total: toMajorUnits(d.totalCents),
+                pct: percentages(d.totalCents, totalExpensesCents, { clamp: true, decimals: 0 }),
+            }))
+            .sort((a, b) => b.totalCents - a.totalCents);
+    }, [filtered, totalExpensesCents]);
 
     /* Top merchants */
     const topMerchants = useMemo(() => {
-        const map: Record<string, { total: number; count: number }> = {};
+        const map: Record<string, { totalCents: number; count: number }> = {};
         for (const t of filtered.filter(t => t.type === "expense" && t.merchant)) {
             const m = t.merchant;
-            if (!map[m]) map[m] = { total: 0, count: 0 };
-            map[m].total += Math.abs(t.amount);
+            if (!map[m]) map[m] = { totalCents: 0, count: 0 };
+            map[m].totalCents += Math.abs(amountCentsOf(t));
             map[m].count++;
         }
-        return Object.entries(map).map(([name, d]) => ({ name, ...d })).sort((a, b) => b.total - a.total).slice(0, 5);
+        return Object.entries(map)
+            .map(([name, d]) => ({ name, ...d, total: toMajorUnits(d.totalCents) }))
+            .sort((a, b) => b.totalCents - a.totalCents)
+            .slice(0, 5);
     }, [filtered]);
 
     /* Anomalies */
@@ -296,8 +340,8 @@ export default function TransaccionesPage() {
     }, [anomalies]);
 
     const hasActiveFilters = filterCategory || filterType || filterAccount || searchQuery;
-    const dateGroups = groupByDate(filtered);
-    const sortedDates = Object.keys(dateGroups).sort((a, b) => b.localeCompare(a));
+    const dateGroups = useMemo(() => groupByDate(filtered), [filtered]);
+    const sortedDates = useMemo(() => Object.keys(dateGroups).sort((a, b) => b.localeCompare(a)), [dateGroups]);
 
     /* ── Loading ── */
     if (loading) return (
@@ -307,7 +351,7 @@ export default function TransaccionesPage() {
     );
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6 no-glass-inside">
             {/* ═══ Slate ambient — Transactions identity ═══ */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
                 <div className="absolute -top-20 right-10 w-[420px] h-[420px] rounded-full opacity-[0.04]"
@@ -488,8 +532,11 @@ export default function TransaccionesPage() {
                         </select>
 
                         {hasActiveFilters && (
-                            <button onClick={() => { setFilterCategory(""); setFilterType(""); setFilterAccount(""); setSearchQuery(""); }}
-                                className="p-2 text-slate-400 hover:text-slate-600 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0">
+                            <button
+                                aria-label="Limpiar filtros"
+                                onClick={() => { setFilterCategory(""); setFilterType(""); setFilterAccount(""); setSearchQuery(""); }}
+                                className="touch-target focus-ring p-2 text-slate-400 hover:text-slate-600 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+                            >
                                 <span className="material-icons-round text-lg">filter_list_off</span>
                             </button>
                         )}
@@ -511,7 +558,7 @@ export default function TransaccionesPage() {
                                 <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                                 <span className="text-[11px] text-slate-400 tabular-nums">
                                     {dateGroups[dateKey].filter(t => t.type === "expense").length > 0 && (
-                                        <span className="text-red-400">-{formatCurrency(dateGroups[dateKey].filter(t => t.type === "expense").reduce((s, t) => s + Math.abs(t.amount), 0))}</span>
+                                        <span className="text-red-400">-{formatCurrency(toMajorUnits(dateGroups[dateKey].filter(t => t.type === "expense").reduce((s, t) => s + Math.abs(amountCentsOf(t)), 0)))}</span>
                                     )}
                                 </span>
                             </div>
@@ -519,7 +566,7 @@ export default function TransaccionesPage() {
                             {/* Transaction items */}
                             <div className="space-y-2">
                                 {dateGroups[dateKey].map(tx => (
-                                    <TransactionItem key={tx.id} tx={tx} anomalies={anomalyMap[tx.id]} onDelete={handleDelete} onUpdateCategory={quickUpdateCategory} deletingId={isDeleting} syncingId={isSyncing} />
+                                    <TransactionItem key={tx.id} tx={tx} anomalies={anomalyMap[tx.id]} onDelete={requestDelete} onUpdateCategory={quickUpdateCategory} deletingId={isDeleting} syncingId={isSyncing} />
                                 ))}
                             </div>
                         </section>
@@ -568,7 +615,7 @@ export default function TransaccionesPage() {
                     </div>
 
                     {/* Income vs Expense visual */}
-                    {totalIncome > 0 && (
+                    {totalIncomeCents > 0 && (
                         <div className="liquid-card rounded-xl p-5">
                             <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                                 <span className="material-icons-round text-slate-500 text-lg">balance</span>
@@ -576,8 +623,8 @@ export default function TransaccionesPage() {
                             </h3>
                             {/* Visual bar */}
                             <div className="flex h-3 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 mb-3">
-                                <div className="bg-emerald-500 rounded-l-full transition-all" style={{ width: `${Math.min(100, Math.round((totalIncome / (totalIncome + totalExpenses)) * 100))}%` }} />
-                                <div className="bg-red-400 rounded-r-full transition-all" style={{ width: `${Math.min(100, Math.round((totalExpenses / (totalIncome + totalExpenses)) * 100))}%` }} />
+                                <div className="bg-emerald-500 rounded-l-full transition-all" style={{ width: `${percentages(totalIncomeCents, totalIncomeCents + totalExpensesCents, { clamp: true, decimals: 0 })}%` }} />
+                                <div className="bg-red-400 rounded-r-full transition-all" style={{ width: `${percentages(totalExpensesCents, totalIncomeCents + totalExpensesCents, { clamp: true, decimals: 0 })}%` }} />
                             </div>
                             <div className="flex justify-between text-xs">
                                 <div className="flex items-center gap-1.5">
@@ -702,6 +749,15 @@ export default function TransaccionesPage() {
                     </div>
                 </form>
             </Modal>
+            <ConfirmDialog
+                open={pendingDeleteId !== null}
+                title="Eliminar transacción"
+                description="Esta acción eliminará la transacción de forma permanente."
+                confirmText="Eliminar"
+                loading={isDeleting !== null}
+                onCancel={() => setPendingDeleteId(null)}
+                onConfirm={handleDelete}
+            />
         </div>
     );
 }

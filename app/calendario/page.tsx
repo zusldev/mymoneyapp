@@ -32,6 +32,7 @@ import type { CalendarTransaction as Transaction, CalendarSubscription as Subscr
 import { apiGet, normalizeApiError } from "../lib/api";
 import { subscriptionArraySchema, transactionArraySchema } from "../lib/schemas";
 import { toastError } from "../lib/toast";
+import { parse, toMajorUnits } from "../lib/money";
 
 // Helpers
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -45,6 +46,11 @@ const getFirstDayOfMonth = (year: number, month: number) => {
     const day = new Date(year, month, 1).getDay();
     return day === 0 ? 6 : day - 1; // Adjust for Mon start (0=Mon, 6=Sun)
 };
+
+function amountCentsOf(value: { amount?: number; amountCents?: number }) {
+    if (typeof value.amountCents === "number") return value.amountCents;
+    return parse(value.amount ?? 0);
+}
 
 export default function CalendarioPage() {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -69,14 +75,14 @@ export default function CalendarioPage() {
                 txs.map((tx) => ({
                     ...tx,
                     type: tx.type === "income" ? "income" : "expense",
-                    amount: tx.amount ?? (tx.amountCents ?? 0) / 100,
+                    amount: toMajorUnits(amountCentsOf(tx)),
                     merchant: tx.merchant ?? "",
                 }))
             );
             setSubscriptions(
                 subs.map((sub) => ({
                     ...sub,
-                    amount: sub.amount ?? (sub.amountCents ?? 0) / 100,
+                    amount: toMajorUnits(amountCentsOf(sub)),
                 }))
             );
         } catch (e) {
@@ -161,14 +167,21 @@ export default function CalendarioPage() {
         return d.getMonth() === month && d.getFullYear() === year;
     });
 
-    const income = currentMonthTxs.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
-    const expenses = currentMonthTxs.filter(t => t.type === "expense").reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    const balance = income - expenses;
+    const incomeCents = currentMonthTxs
+        .filter(t => t.type === "income")
+        .reduce((sum, t) => sum + Math.abs(amountCentsOf(t)), 0);
+    const expensesCents = currentMonthTxs
+        .filter(t => t.type === "expense")
+        .reduce((sum, t) => sum + Math.abs(amountCentsOf(t)), 0);
+    const balanceCents = incomeCents - expensesCents;
+    const income = toMajorUnits(incomeCents);
+    const expenses = toMajorUnits(expensesCents);
+    const balance = toMajorUnits(balanceCents);
 
     // Upcoming
     const upcoming = [
         ...subscriptions.filter(s => s.active).map(s => ({
-            type: "sub", date: new Date(s.nextDate), text: s.name, amount: -s.amount, icon: "sync"
+            type: "sub", date: new Date(s.nextDate), text: s.name, amountCents: -Math.abs(amountCentsOf(s)), icon: "sync"
         })),
         // Add pending transactions logic if available, for now just future subs
     ].sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 5);
@@ -189,7 +202,7 @@ export default function CalendarioPage() {
                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Calendario Financiero</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                        Proyección: Ahorro estimado de {formatCurrency(Math.max(0, income - expenses))} este mes
+                        Proyección: Ahorro estimado de {formatCurrency(toMajorUnits(Math.max(0, balanceCents)))} este mes
                     </p>
                 </div>
 
@@ -267,7 +280,7 @@ export default function CalendarioPage() {
                                                         : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 border-red-100 dark:border-red-900/30"
                                                         }`}>
                                                         <span className="truncate flex-1">{t.merchant || t.description}</span>
-                                                        <span className="font-semibold">{formatCurrency(Math.abs(t.amount))}</span>
+                                                        <span className="font-semibold">{formatCurrency(toMajorUnits(Math.abs(amountCentsOf(t))))}</span>
                                                     </div>
                                                 ))}
                                                 {txs.length > 2 && <div className="text-[9px] text-slate-400 pl-1">+{txs.length - 2} más</div>}
@@ -311,10 +324,11 @@ export default function CalendarioPage() {
                                 const dailyBalances = Array.from({ length: daysInMonth }, (_, i) => {
                                     const day = i + 1;
                                     const { txs, subs } = getEventsForDay(day);
-                                    const dailyChange = txs.reduce((acc, t) => acc + (t.type === "income" ? t.amount : -t.amount), 0)
-                                        + subs.reduce((acc, s) => acc - s.amount, 0);
-                                    running += dailyChange;
-                                    return running;
+                                    const dailyChangeCents =
+                                        txs.reduce((acc, t) => acc + (t.type === "income" ? amountCentsOf(t) : -Math.abs(amountCentsOf(t))), 0)
+                                        + subs.reduce((acc, s) => acc - Math.abs(amountCentsOf(s)), 0);
+                                    running += dailyChangeCents;
+                                    return toMajorUnits(running);
                                 });
 
                                 const labels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
@@ -445,7 +459,7 @@ export default function CalendarioPage() {
                                     const d = new Date(s.nextDate).getDate();
                                     return d >= 20 && d <= 28;
                                 });
-                                const unusedSubs = activeSubs.filter(s => s.amount < 100);
+                                const unusedSubs = activeSubs.filter(s => amountCentsOf(s) < parse(100));
                                 const tips: { text: string; type: "alert" | "info" }[] = [];
 
                                 if (monthSubs.length > 0) {
@@ -493,8 +507,8 @@ export default function CalendarioPage() {
                                         <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{item.text}</p>
                                         <p className="text-xs text-slate-500 truncate">{item.date.toLocaleDateString("es-MX", { day: "numeric", month: "short" })}</p>
                                     </div>
-                                    <span className={`text-sm font-bold ${item.amount > 0 ? "text-green-600" : "text-slate-700 dark:text-slate-300"}`}>
-                                        {formatCurrency(item.amount)}
+                                    <span className={`text-sm font-bold ${item.amountCents > 0 ? "text-green-600" : "text-slate-700 dark:text-slate-300"}`}>
+                                        {formatCurrency(toMajorUnits(item.amountCents))}
                                     </span>
                                 </div>
                             ))}

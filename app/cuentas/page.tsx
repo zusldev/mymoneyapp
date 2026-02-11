@@ -1,11 +1,14 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import type { AccountFull as Account } from "../lib/types";
 import { apiGet, apiPost, normalizeApiError } from "../lib/api";
 import { accountArraySchema } from "../lib/schemas";
 import { toastError, toastSuccess } from "../lib/toast";
+import { parse, percentages, toMajorUnits } from "../lib/money";
+import { toMonthlyCents, type RecurrenceFrequency } from "../lib/dates";
 
 /* ═══ Constants ═══ */
 const T = { 300: "#5eead4", 400: "#2dd4bf", 500: "#14b8a6", 600: "#0d9488", 700: "#0f766e" };
@@ -16,14 +19,16 @@ const colorOptions = ["#14b8a6", "#0d9488", "#06b6d4", "#0891b2", "#8b5cf6", "#0
 
 /* ═══ Insights ═══ */
 interface Insight { icon: string; title: string; desc: string; severity: "info" | "warn" | "tip"; }
-const moneyValue = (major?: number, cents?: number) => major ?? (cents ?? 0) / 100;
+const moneyValue = (major?: number, cents?: number) => toMajorUnits(typeof cents === "number" ? cents : parse(major ?? 0));
+const moneyCents = (major?: number, cents?: number) => (typeof cents === "number" ? cents : parse(major ?? 0));
+const accountBalanceCents = (account: Pick<Account, "balance" | "balanceCents">) => moneyCents(account.balance, account.balanceCents);
 const accountBalance = (account: Pick<Account, "balance" | "balanceCents">) => moneyValue(account.balance, account.balanceCents);
 const recurringAmount = (item: { amount?: number; amountCents?: number }) => moneyValue(item.amount, item.amountCents);
-function generateInsights(accounts: Account[], total: number): Insight[] {
+function generateInsights(accounts: Account[], totalCents: number): Insight[] {
     const ins: Insight[] = [];
-    if (accounts.length === 0 || total <= 0) return ins;
-    const maxPct = Math.max(...accounts.map(a => (accountBalance(a) / total) * 100));
-    const dom = accounts.find(a => (accountBalance(a) / total) * 100 === maxPct);
+    if (accounts.length === 0 || totalCents <= 0) return ins;
+    const maxPct = Math.max(...accounts.map(a => percentages(accountBalanceCents(a), totalCents, { clamp: true, decimals: 0 })));
+    const dom = accounts.find(a => percentages(accountBalanceCents(a), totalCents, { clamp: true, decimals: 0 }) === maxPct);
     if (maxPct > 70 && accounts.length > 1) ins.push({ icon: "warning", title: "Alta concentración", desc: `${Math.round(maxPct)}% en ${dom?.name}. Diversificar reduciría riesgo.`, severity: "warn" });
     const ck = accounts.filter(a => a.type === "checking").reduce((s, a) => s + accountBalance(a), 0);
     const sv = accounts.filter(a => a.type === "savings").reduce((s, a) => s + accountBalance(a), 0);
@@ -44,13 +49,13 @@ function AccountCard({ account, total, index, onEdit, onDelete, deletingId }: {
     deletingId: string | null;
 }) {
     const balance = accountBalance(account);
-    const pct = total > 0 ? Math.max(0, (balance / total) * 100) : 0;
+    const pct = percentages(accountBalanceCents(account), total, { clamp: true, decimals: 0 });
     const icon = typeIcons[account.type] || "account_balance_wallet";
     const lastTx = account.transactions?.[0];
     const subCount = account.subscriptions?.length || 0;
     const incomeCount = account.incomes?.length || 0;
-    const monthlySubCost = (account.subscriptions || []).reduce((s, sub) => s + (sub.frequency === "yearly" ? recurringAmount(sub) / 12 : recurringAmount(sub)), 0);
-    const monthlyIncome = (account.incomes || []).reduce((s, inc) => s + (inc.frequency === "yearly" ? recurringAmount(inc) / 12 : recurringAmount(inc)), 0);
+    const monthlySubCost = (account.subscriptions || []).reduce((s, sub) => s + toMajorUnits(toMonthlyCents(moneyCents(sub.amount, sub.amountCents), sub.frequency as RecurrenceFrequency)), 0);
+    const monthlyIncome = (account.incomes || []).reduce((s, inc) => s + toMajorUnits(toMonthlyCents(moneyCents(inc.amount, inc.amountCents), inc.frequency as RecurrenceFrequency)), 0);
 
     // Dynamic font scaling
     const fontScale = 1.35 + Math.min(pct / 30, 1) * 0.45;
@@ -74,10 +79,19 @@ function AccountCard({ account, total, index, onEdit, onDelete, deletingId }: {
                     </div>
                 </div>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onEdit(account)} className="p-1.5 rounded-lg hover:bg-teal-500/10 text-slate-400 hover:text-teal-600 transition-colors">
+                    <button
+                        aria-label={`Editar cuenta ${account.name}`}
+                        onClick={() => onEdit(account)}
+                        className="touch-target focus-ring p-1.5 rounded-lg hover:bg-teal-500/10 text-slate-400 hover:text-teal-600 transition-colors"
+                    >
                         <span className="material-icons-round text-[15px]">edit</span>
                     </button>
-                    <button disabled={deletingId === account.id} onClick={() => onDelete(account.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-60">
+                    <button
+                        aria-label={`Eliminar cuenta ${account.name}`}
+                        disabled={deletingId === account.id}
+                        onClick={() => onDelete(account.id)}
+                        className="touch-target focus-ring p-1.5 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-60"
+                    >
                         <span className="material-icons-round text-[15px]">delete_outline</span>
                     </button>
                 </div>
@@ -141,6 +155,7 @@ export default function CuentasPage() {
     const [editingAccount, setEditingAccount] = useState<Account | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [form, setForm] = useState({ name: "", type: "checking", balance: "", currency: "MXN", color: "#14b8a6", icon: "" });
     const [simFrom, setSimFrom] = useState("");
     const [simTo, setSimTo] = useState("");
@@ -157,25 +172,45 @@ export default function CuentasPage() {
     };
     useEffect(() => { fetchAccounts(); }, []);
 
-    const totalBalance = accounts.reduce((s, a) => s + accountBalance(a), 0);
-    const liquidBalance = accounts.filter(a => a.type !== "investment").reduce((s, a) => s + accountBalance(a), 0);
-    const reservedBalance = accounts.filter(a => a.type === "savings" || a.type === "investment").reduce((s, a) => s + accountBalance(a), 0);
-    const insights = useMemo(() => generateInsights(accounts, totalBalance), [accounts, totalBalance]);
-    const hhi = accounts.length > 0 && totalBalance > 0 ? accounts.reduce((s, a) => s + Math.pow((accountBalance(a) / totalBalance) * 100, 2), 0) : 0;
+    const totalBalanceCents = accounts.reduce((s, a) => s + accountBalanceCents(a), 0);
+    const totalBalance = toMajorUnits(totalBalanceCents);
+    const liquidBalance = toMajorUnits(accounts.filter(a => a.type !== "investment").reduce((s, a) => s + accountBalanceCents(a), 0));
+    const reservedBalance = toMajorUnits(accounts.filter(a => a.type === "savings" || a.type === "investment").reduce((s, a) => s + accountBalanceCents(a), 0));
+    const insights = useMemo(() => generateInsights(accounts, totalBalanceCents), [accounts, totalBalanceCents]);
+    const hhi = accounts.length > 0 && totalBalanceCents > 0
+        ? accounts.reduce((s, a) => s + Math.pow(percentages(accountBalanceCents(a), totalBalanceCents, { clamp: true, decimals: 2 }), 2), 0)
+        : 0;
     const concentrationRisk = hhi > 6000 ? "Alto" : hhi > 3000 ? "Medio" : "Bajo";
     const concentrationColor = hhi > 6000 ? "text-red-500" : hhi > 3000 ? "text-amber-500" : "text-teal-500";
 
     const simPreview = useMemo(() => {
         if (!simFrom || !simTo || !simAmount || simFrom === simTo) return null;
-        const amt = parseFloat(simAmount);
-        if (isNaN(amt) || amt <= 0) return null;
+        let amtCents: number;
+        try {
+            amtCents = parse(simAmount);
+        } catch {
+            return null;
+        }
+        if (amtCents <= 0) return null;
         const from = accounts.find(a => a.id === simFrom);
         const to = accounts.find(a => a.id === simTo);
         if (!from || !to) return null;
-        const fromBalance = accountBalance(from);
-        const toBalance = accountBalance(to);
-        if (amt > fromBalance) return { error: "Fondos insuficientes" };
-        return { from: { ...from, balance: fromBalance, newBalance: fromBalance - amt }, to: { ...to, balance: toBalance, newBalance: toBalance + amt }, amount: amt };
+        const fromBalanceCents = moneyCents(from.balance, from.balanceCents);
+        const toBalanceCents = moneyCents(to.balance, to.balanceCents);
+        if (amtCents > fromBalanceCents) return { error: "Fondos insuficientes" };
+        return {
+            from: {
+                ...from,
+                balance: toMajorUnits(fromBalanceCents),
+                newBalance: toMajorUnits(fromBalanceCents - amtCents),
+            },
+            to: {
+                ...to,
+                balance: toMajorUnits(toBalanceCents),
+                newBalance: toMajorUnits(toBalanceCents + amtCents),
+            },
+            amount: toMajorUnits(amtCents),
+        };
     }, [simFrom, simTo, simAmount, accounts]);
 
     const openCreate = () => { setEditingAccount(null); setForm({ name: "", type: "checking", balance: "", currency: "MXN", color: "#14b8a6", icon: "" }); setModalOpen(true); };
@@ -197,8 +232,12 @@ export default function CuentasPage() {
             setIsSaving(false);
         }
     };
-    const handleDelete = async (id: string) => {
-        if (!confirm("¿Eliminar esta cuenta? Se borrarán todas sus transacciones.")) return;
+    const requestDelete = (id: string) => {
+        setPendingDeleteId(id);
+    };
+    const handleDelete = async () => {
+        if (!pendingDeleteId) return;
+        const id = pendingDeleteId;
         setIsDeleting(id);
         try {
             await apiPost(`/api/accounts/${id}`, null, undefined, "DELETE");
@@ -209,6 +248,7 @@ export default function CuentasPage() {
             toastError(failure.error);
         } finally {
             setIsDeleting(null);
+            setPendingDeleteId(null);
         }
     };
 
@@ -263,7 +303,7 @@ export default function CuentasPage() {
                     <div className="mt-6">
                         <div className="flex h-2 rounded-full overflow-hidden gap-px">
                             {[...accounts].sort((a, b) => accountBalance(b) - accountBalance(a)).map((a, i) => {
-                                const pct = totalBalance > 0 ? Math.max(0, (accountBalance(a) / totalBalance) * 100) : 0;
+                                const pct = percentages(accountBalanceCents(a), totalBalanceCents, { clamp: true, decimals: 0 });
                                 return (
                                     <div key={a.id}
                                         className="rounded-full transition-all duration-1000 ease-out relative group/seg"
@@ -326,7 +366,7 @@ export default function CuentasPage() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[...accounts].sort((a, b) => accountBalance(b) - accountBalance(a)).map((account, idx) => (
-                            <AccountCard key={account.id} account={account} total={totalBalance} index={idx} onEdit={openEdit} onDelete={handleDelete} deletingId={isDeleting} />
+                            <AccountCard key={account.id} account={account} total={totalBalanceCents} index={idx} onEdit={openEdit} onDelete={requestDelete} deletingId={isDeleting} />
                         ))}
                     </div>
                 )}
@@ -463,6 +503,15 @@ export default function CuentasPage() {
                     </div>
                 </form>
             </Modal>
+            <ConfirmDialog
+                open={pendingDeleteId !== null}
+                title="Eliminar cuenta"
+                description="Se eliminará la cuenta y sus transacciones relacionadas."
+                confirmText="Eliminar"
+                loading={isDeleting !== null}
+                onCancel={() => setPendingDeleteId(null)}
+                onConfirm={handleDelete}
+            />
         </div>
     );
 }

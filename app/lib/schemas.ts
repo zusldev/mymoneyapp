@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toMajorUnits } from "./money";
 
 const amountOptional = z.number().finite();
 const cents = z.number().int();
@@ -13,7 +14,7 @@ const miniTxSchema = z.object({
   category: z.string().optional().default("otros"),
 }).transform((value) => ({
   ...value,
-  amount: value.amount ?? value.amountCents / 100,
+  amount: value.amount ?? toMajorUnits(value.amountCents),
 }));
 
 const miniRecurringSchema = z.object({
@@ -25,7 +26,7 @@ const miniRecurringSchema = z.object({
   icon: z.string().optional().default("sync"),
 }).transform((value) => ({
   ...value,
-  amount: value.amount ?? value.amountCents / 100,
+  amount: value.amount ?? toMajorUnits(value.amountCents),
 }));
 
 export const accountSchema = z.object({
@@ -45,7 +46,7 @@ export const accountSchema = z.object({
   ...value,
   type: value.type ?? "checking",
   currency: value.currency ?? "MXN",
-  balance: value.balance ?? value.balanceCents / 100,
+  balance: value.balance ?? toMajorUnits(value.balanceCents),
 }));
 
 export const transactionSchema = z.object({
@@ -67,7 +68,7 @@ export const transactionSchema = z.object({
     .optional(),
 }).transform((value) => ({
   ...value,
-  amount: value.amount ?? value.amountCents / 100,
+  amount: value.amount ?? toMajorUnits(value.amountCents),
   merchantNormalized: value.merchantNormalized ?? value.merchant.trim().toLowerCase(),
 }));
 
@@ -88,7 +89,7 @@ export const subscriptionSchema = z.object({
   createdAt: z.string().optional().default("1970-01-01T00:00:00.000Z"),
 }).transform((value) => ({
   ...value,
-  amount: value.amount ?? value.amountCents / 100,
+  amount: value.amount ?? toMajorUnits(value.amountCents),
 }));
 
 export const incomeSchema = z.object({
@@ -107,7 +108,7 @@ export const incomeSchema = z.object({
   creditCardId: z.string().nullable().optional().default(null),
 }).transform((value) => ({
   ...value,
-  amount: value.amount ?? value.amountCents / 100,
+  amount: value.amount ?? toMajorUnits(value.amountCents),
 }));
 
 export const accountArraySchema = z.array(accountSchema);
@@ -131,8 +132,8 @@ export const creditCardSchema = z.object({
   _count: z.object({ transactions: z.number() }).optional(),
 }).transform((value) => ({
   ...value,
-  creditLimit: value.creditLimit ?? value.creditLimitCents / 100,
-  balance: value.balance ?? value.balanceCents / 100,
+  creditLimit: value.creditLimit ?? toMajorUnits(value.creditLimitCents),
+  balance: value.balance ?? toMajorUnits(value.balanceCents),
 }));
 
 export const creditCardArraySchema = z.array(creditCardSchema);
@@ -149,8 +150,8 @@ export const goalSchema = z.object({
   color: z.string().optional().default("#10b981"),
 }).transform((value) => ({
   ...value,
-  targetAmount: value.targetAmount ?? value.targetAmountCents / 100,
-  currentAmount: value.currentAmount ?? value.currentAmountCents / 100,
+  targetAmount: value.targetAmount ?? toMajorUnits(value.targetAmountCents),
+  currentAmount: value.currentAmount ?? toMajorUnits(value.currentAmountCents),
 }));
 
 export const goalArraySchema = z.array(goalSchema);
