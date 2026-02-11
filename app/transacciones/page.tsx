@@ -1,14 +1,19 @@
 "use client";
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { memo, useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import { CATEGORIES, CATEGORY_KEYS, CategoryKey, getCatIcon, getCatColors } from "../lib/categories";
 import type { Transaction, Account, CreditCard, TransactionAnomaly as Anomaly } from "../lib/types";
+import { apiGet, apiPost, normalizeApiError } from "../lib/api";
+import { accountArraySchema, creditCardArraySchema, transactionArraySchema } from "../lib/schemas";
+import { toastError, toastSuccess } from "../lib/toast";
 
 /* ═══ TransactionItem Component ═══ */
-function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategory }: {
+const TransactionItem = memo(function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategory, deletingId, syncingId }: {
     tx: Transaction; anomalies?: Anomaly[]; onDelete: (id: string) => void;
     onUpdateCategory: (id: string, cat: string) => void;
+    deletingId: string | null;
+    syncingId: string | null;
 }) {
     const [showCatPicker, setShowCatPicker] = useState(false);
     const catPickerRef = useRef<HTMLDivElement>(null);
@@ -52,14 +57,14 @@ function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategor
                     <span className="w-0.5 h-0.5 rounded-full bg-slate-300 dark:bg-slate-600" />
                     {/* Clickable category */}
                     <div className="relative" ref={catPickerRef}>
-                        <button onClick={() => setShowCatPicker(!showCatPicker)} className="hover:text-[#2badee] transition-colors flex items-center gap-0.5">
+                        <button disabled={syncingId === tx.id} onClick={() => setShowCatPicker(!showCatPicker)} className="hover:text-[#2badee] transition-colors flex items-center gap-0.5 disabled:opacity-60">
                             {cat.label}
                             <span className="material-icons-round text-[10px] opacity-0 group-hover:opacity-100">edit</span>
                         </button>
                         {showCatPicker && (
                             <div className="absolute top-5 left-0 z-50 bg-white dark:bg-[#1a262d] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1 w-44 max-h-48 overflow-y-auto">
                                 {CATEGORY_KEYS.map(k => (
-                                    <button key={k} onClick={() => { onUpdateCategory(tx.id, k); setShowCatPicker(false); }}
+                                    <button disabled={syncingId === tx.id} key={k} onClick={() => { onUpdateCategory(tx.id, k); setShowCatPicker(false); }}
                                         className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 ${tx.category === k ? "font-bold text-[#2badee]" : "text-slate-600 dark:text-slate-300"}`}>
                                         <span className="material-icons-round text-sm" style={{ color: CATEGORIES[k].color }}>{CATEGORIES[k].icon}</span>
                                         {CATEGORIES[k].label}
@@ -93,14 +98,14 @@ function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategor
                 <p className={`text-base font-bold tabular-nums ${isIncome ? "text-emerald-600" : "text-slate-900 dark:text-white"}`}>
                     {isIncome ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
                 </p>
-                <button onClick={e => { e.stopPropagation(); onDelete(tx.id); }}
-                    className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all mt-1">
+                <button disabled={deletingId === tx.id} onClick={e => { e.stopPropagation(); onDelete(tx.id); }}
+                    className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all mt-1 disabled:opacity-60">
                     <span className="material-icons-round text-sm">delete_outline</span>
                 </button>
             </div>
         </div>
     );
-}
+});
 
 /* ═══ Helpers ═══ */
 function groupByDate(txs: Transaction[]): Record<string, Transaction[]> {
@@ -164,6 +169,9 @@ export default function TransaccionesPage() {
     const [filterType, setFilterType] = useState("");
     const [filterAccount, setFilterAccount] = useState("");
     const [showAnalysis, setShowAnalysis] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState<string | null>(null);
     const [form, setForm] = useState({
         amount: "", type: "expense", date: new Date().toISOString().split("T")[0],
         merchant: "", description: "", category: "otros", accountId: "", creditCardId: "",
@@ -179,14 +187,18 @@ export default function TransaccionesPage() {
             if (filterAccount.startsWith("cc:")) p.set("creditCardId", filterAccount.replace("cc:", ""));
             p.set("limit", "200");
 
-            const [txR, accR, ccR] = await Promise.all([
-                fetch(`/api/transactions?${p}`), fetch("/api/accounts"), fetch("/api/credit-cards"),
+            const [tx, acc, cc] = await Promise.all([
+                apiGet(`/api/transactions?${p}`, transactionArraySchema),
+                apiGet("/api/accounts", accountArraySchema),
+                apiGet("/api/credit-cards", creditCardArraySchema),
             ]);
-            const [tx, acc, cc] = await Promise.all([txR.json(), accR.json(), ccR.json()]);
             setTransactions(Array.isArray(tx) ? tx : []);
             setAccounts(Array.isArray(acc) ? acc : []);
             setCards(Array.isArray(cc) ? cc : []);
-        } catch { /* */ } finally { setLoading(false); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally { setLoading(false); }
     }, [filterCategory, filterType, filterAccount]);
 
     useEffect(() => { fetchData(); }, [fetchData]);
@@ -194,15 +206,46 @@ export default function TransaccionesPage() {
     /* ── CRUD ── */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await fetch("/api/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, accountId: form.accountId || null, creditCardId: form.creditCardId || null }) });
-        setModalOpen(false);
-        setForm({ amount: "", type: "expense", date: new Date().toISOString().split("T")[0], merchant: "", description: "", category: "otros", accountId: "", creditCardId: "" });
-        fetchData();
+        setIsSaving(true);
+        try {
+            await apiPost("/api/transactions", { ...form, accountId: form.accountId || null, creditCardId: form.creditCardId || null });
+            toastSuccess("Transacción guardada");
+            setModalOpen(false);
+            setForm({ amount: "", type: "expense", date: new Date().toISOString().split("T")[0], merchant: "", description: "", category: "otros", accountId: "", creditCardId: "" });
+            fetchData();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSaving(false);
+        }
     };
-    const handleDelete = async (id: string) => { if (!confirm("¿Eliminar esta transacción?")) return; await fetch(`/api/transactions/${id}`, { method: "DELETE" }); fetchData(); };
+    const handleDelete = async (id: string) => {
+        if (!confirm("¿Eliminar esta transacción?")) return;
+        setIsDeleting(id);
+        try {
+            await apiPost(`/api/transactions/${id}`, null, undefined, "DELETE");
+            toastSuccess("Transacción eliminada");
+            fetchData();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsDeleting(null);
+        }
+    };
     const quickUpdateCategory = async (id: string, category: string) => {
-        await fetch(`/api/transactions/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category }) });
-        fetchData();
+        setIsSyncing(id);
+        try {
+            await apiPost(`/api/transactions/${id}`, { category }, undefined, "PUT");
+            toastSuccess("Categoría actualizada");
+            fetchData();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSyncing(null);
+        }
     };
 
     /* ── Filtering ── */
@@ -476,7 +519,7 @@ export default function TransaccionesPage() {
                             {/* Transaction items */}
                             <div className="space-y-2">
                                 {dateGroups[dateKey].map(tx => (
-                                    <TransactionItem key={tx.id} tx={tx} anomalies={anomalyMap[tx.id]} onDelete={handleDelete} onUpdateCategory={quickUpdateCategory} />
+                                    <TransactionItem key={tx.id} tx={tx} anomalies={anomalyMap[tx.id]} onDelete={handleDelete} onUpdateCategory={quickUpdateCategory} deletingId={isDeleting} syncingId={isSyncing} />
                                 ))}
                             </div>
                         </section>
@@ -652,8 +695,10 @@ export default function TransaccionesPage() {
                         </div>
                     </div>
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-                        <button type="submit" className="btn-primary flex-1">Agregar</button>
+                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
+                        <button type="submit" className="btn-primary flex-1" disabled={isSaving}>
+                            {isSaving ? "Guardando..." : "Agregar"}
+                        </button>
                     </div>
                 </form>
             </Modal>

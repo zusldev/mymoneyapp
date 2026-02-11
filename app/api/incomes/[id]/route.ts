@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { incomeDto, parseAmountInput } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,18 +13,10 @@ export async function GET(
     try {
         const income = await prisma.income.findUnique({ where: { id } });
         if (!income) return NextResponse.json({ error: "Ingreso no encontrado" }, { status: 404 });
-        return NextResponse.json(income);
+        return NextResponse.json(incomeDto(income));
     } catch (error) {
         console.error("Error fetching income:", error);
-        return NextResponse.json({
-            id,
-            name: "Ingreso (Fallback)",
-            amount: 0,
-            frequency: "monthly",
-            active: true,
-            nextDate: new Date().toISOString(),
-            color: "#10b981"
-        });
+        return NextResponse.json({ ok: false, error: "Error al cargar ingreso" }, { status: 500 });
     }
 }
 
@@ -38,7 +31,7 @@ export async function PUT(
             where: { id },
             data: {
                 name: body.name,
-                amount: body.amount !== undefined ? parseFloat(body.amount) : undefined,
+                amountCents: body.amount !== undefined ? parseAmountInput(body.amount) : undefined,
                 frequency: body.frequency,
                 type: body.type,
                 nextDate: body.nextDate ? new Date(body.nextDate) : undefined,
@@ -50,7 +43,7 @@ export async function PUT(
                 creditCardId: body.creditCardId,
             },
         });
-        return NextResponse.json(income);
+        return NextResponse.json(incomeDto(income));
     } catch (error) {
         console.error("Error updating income:", error);
         return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });

@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { cardDto, parseAmountInput, txDto } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -17,22 +18,13 @@ export async function GET(
         if (!card) {
             return NextResponse.json({ error: "Tarjeta no encontrada" }, { status: 404 });
         }
-        return NextResponse.json(card);
+        return NextResponse.json({
+            ...cardDto(card),
+            transactions: card.transactions.map(txDto),
+        });
     } catch (error) {
         console.error("Error fetching credit card:", error);
-        return NextResponse.json({
-            id,
-            name: "Tarjeta (Fallback)",
-            bank: "Banco",
-            lastFour: "0000",
-            creditLimit: 0,
-            balance: 0,
-            cutDate: 1,
-            payDate: 20,
-            apr: 0,
-            color: "#8b5cf6",
-            transactions: []
-        });
+        return NextResponse.json({ ok: false, error: "Error al cargar tarjeta" }, { status: 500 });
     }
 }
 
@@ -49,15 +41,15 @@ export async function PUT(
                 name: body.name,
                 bank: body.bank,
                 lastFour: body.lastFour,
-                creditLimit: body.creditLimit !== undefined ? parseFloat(body.creditLimit) : undefined,
-                balance: body.balance !== undefined ? parseFloat(body.balance) : undefined,
+                creditLimitCents: body.creditLimit !== undefined ? parseAmountInput(body.creditLimit) : undefined,
+                balanceCents: body.balance !== undefined ? parseAmountInput(body.balance) : undefined,
                 cutDate: body.cutDate !== undefined ? parseInt(body.cutDate) : undefined,
                 payDate: body.payDate !== undefined ? parseInt(body.payDate) : undefined,
                 apr: body.apr !== undefined ? parseFloat(body.apr) : undefined,
                 color: body.color,
             },
         });
-        return NextResponse.json(card);
+        return NextResponse.json(cardDto(card));
     } catch (error) {
         console.error("Error updating credit card:", error);
         return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });

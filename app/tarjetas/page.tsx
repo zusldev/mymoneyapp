@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency, analyzeCreditCard } from "../lib/financialEngine";
 import type { CardData } from "../lib/types";
+import { apiGet, apiPost, normalizeApiError } from "../lib/api";
+import { toastError, toastSuccess } from "../lib/toast";
+import { creditCardArraySchema } from "../lib/schemas";
 
 // Gradient presets for visual cards
 const CARD_GRADIENTS = [
@@ -22,13 +25,23 @@ export default function TarjetasPage() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editingCard, setEditingCard] = useState<CardData | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [form, setForm] = useState({
         name: "", bank: "", lastFour: "", creditLimit: "", balance: "",
         cutDate: "1", payDate: "20", apr: "0", color: "#8b5cf6",
     });
 
-    const fetchCards = () => {
-        fetch("/api/credit-cards").then((r) => r.json()).then(d => setCards(Array.isArray(d) ? d : [])).finally(() => setLoading(false));
+    const fetchCards = async () => {
+        try {
+            const data = await apiGet("/api/credit-cards", creditCardArraySchema);
+            setCards(Array.isArray(data) ? data : []);
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => { fetchCards(); }, []);
@@ -56,23 +69,35 @@ export default function TarjetasPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSaving(true);
         try {
             const method = editingCard ? "PUT" : "POST";
             const url = editingCard ? `/api/credit-cards/${editingCard.id}` : "/api/credit-cards";
-            const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-            if (!res.ok) throw new Error("Error al guardar");
+            await apiPost(url, form, undefined, method);
+            toastSuccess(editingCard ? "Tarjeta actualizada" : "Tarjeta creada");
             setModalOpen(false);
             fetchCards();
-        } catch { alert("Error al guardar la tarjeta. Intenta de nuevo."); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm("¿Eliminar esta tarjeta?")) return;
+        setIsDeleting(id);
         try {
-            const res = await fetch(`/api/credit-cards/${id}`, { method: "DELETE" });
-            if (!res.ok) throw new Error("Error al eliminar");
+            await apiPost(`/api/credit-cards/${id}`, null, undefined, "DELETE");
+            toastSuccess("Tarjeta eliminada");
             fetchCards();
-        } catch { alert("Error al eliminar la tarjeta."); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsDeleting(null);
+        }
     };
 
     // Utilization severity
@@ -183,10 +208,15 @@ export default function TarjetasPage() {
                                         </div>
                                         {/* Edit/Delete buttons */}
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => openEdit(card)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
+                                            <button aria-label={`Editar ${card.name}`} onClick={() => openEdit(card)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
                                                 <span className="material-icons-round text-sm">edit</span>
                                             </button>
-                                            <button onClick={() => handleDelete(card.id)} className="p-1.5 rounded-lg hover:bg-red-500/30 transition-colors">
+                                            <button
+                                                aria-label={`Eliminar ${card.name}`}
+                                                disabled={isDeleting === card.id}
+                                                onClick={() => handleDelete(card.id)}
+                                                className="p-1.5 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-60"
+                                            >
                                                 <span className="material-icons-round text-sm">delete</span>
                                             </button>
                                         </div>
@@ -306,8 +336,10 @@ export default function TarjetasPage() {
                         <div className="flex gap-2">{colorOptions.map((c) => (<button key={c} type="button" onClick={() => setForm({ ...form, color: c })} className={`w-8 h-8 rounded-full transition-transform ${form.color === c ? "scale-125 ring-2 ring-[#2badee]/50" : "hover:scale-110"}`} style={{ backgroundColor: c }} />))}</div>
                     </div>
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-                        <button type="submit" className="btn-primary flex-1">{editingCard ? "Guardar" : "Crear"}</button>
+                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
+                        <button type="submit" className="btn-primary flex-1" disabled={isSaving}>
+                            {isSaving ? "Guardando..." : editingCard ? "Guardar" : "Crear"}
+                        </button>
                     </div>
                 </form>
             </Modal>

@@ -4,6 +4,9 @@ import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import { CATEGORIES, CATEGORY_KEYS } from "../lib/categories";
 import type { Account, CreditCard, Subscription as Sub } from "../lib/types";
+import { apiGet, apiPost, normalizeApiError } from "../lib/api";
+import { accountArraySchema, creditCardArraySchema, incomeArraySchema, subscriptionArraySchema } from "../lib/schemas";
+import { toastError, toastSuccess } from "../lib/toast";
 
 type Filter = "all" | "active" | "paused";
 
@@ -63,6 +66,9 @@ export default function SuscripcionesPage() {
     const [filter, setFilter] = useState<Filter>("all");
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Sub | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState<string | null>(null);
     const [simulateCancelled, setSimulateCancelled] = useState<Set<string>>(new Set());
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [form, setForm] = useState({
@@ -74,16 +80,20 @@ export default function SuscripcionesPage() {
     /* -- Fetch -- */
     const fetchData = async () => {
         try {
-            const [subRes, accRes, ccRes, incRes] = await Promise.all([
-                fetch("/api/subscriptions"), fetch("/api/accounts"),
-                fetch("/api/credit-cards"), fetch("/api/incomes"),
+            const [sub, acc, cc, inc] = await Promise.all([
+                apiGet("/api/subscriptions", subscriptionArraySchema),
+                apiGet("/api/accounts", accountArraySchema),
+                apiGet("/api/credit-cards", creditCardArraySchema),
+                apiGet("/api/incomes", incomeArraySchema),
             ]);
-            const [sub, acc, cc, inc] = await Promise.all([subRes.json(), accRes.json(), ccRes.json(), incRes.json()]);
             setSubs(Array.isArray(sub) ? sub : []);
             setAccounts(Array.isArray(acc) ? acc : []);
             setCards(Array.isArray(cc) ? cc : []);
             setIncomes(Array.isArray(inc) ? inc : []);
-        } catch { /* */ } finally { setLoading(false); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally { setLoading(false); }
     };
     useEffect(() => { fetchData(); }, []);
 
@@ -174,15 +184,47 @@ export default function SuscripcionesPage() {
     };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const url = editing ? `/api/subscriptions/${editing.id}` : "/api/subscriptions";
-        await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-        setModalOpen(false); fetchData();
+        setIsSaving(true);
+        try {
+            const url = editing ? `/api/subscriptions/${editing.id}` : "/api/subscriptions";
+            await apiPost(url, form, undefined, editing ? "PUT" : "POST");
+            toastSuccess(editing ? "Suscripción actualizada" : "Suscripción creada");
+            setModalOpen(false);
+            fetchData();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSaving(false);
+        }
     };
     const toggleActive = async (s: Sub) => {
-        await fetch(`/api/subscriptions/${s.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !s.active }) });
-        fetchData();
+        setIsSyncing(s.id);
+        try {
+            await apiPost(`/api/subscriptions/${s.id}`, { active: !s.active }, undefined, "PUT");
+            toastSuccess(s.active ? "Suscripción pausada" : "Suscripción activada");
+            fetchData();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSyncing(null);
+        }
     };
-    const del = async (id: string) => { if (!confirm("\u00bfEliminar esta suscripci\u00f3n?")) return; await fetch(`/api/subscriptions/${id}`, { method: "DELETE" }); fetchData(); };
+    const del = async (id: string) => {
+        if (!confirm("\u00bfEliminar esta suscripci\u00f3n?")) return;
+        setIsDeleting(id);
+        try {
+            await apiPost(`/api/subscriptions/${id}`, null, undefined, "DELETE");
+            toastSuccess("Suscripción eliminada");
+            fetchData();
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsDeleting(null);
+        }
+    };
 
     /* -- Loading -- */
     if (loading) return (
@@ -505,8 +547,8 @@ export default function SuscripcionesPage() {
                                                     <span className="material-icons-round text-sm">science</span>
                                                     {isSimulated ? "Restaurar" : "Simular"}
                                                 </button>
-                                                <button onClick={(e) => { e.stopPropagation(); toggleActive(sub); }}
-                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40">
+                                                <button disabled={isSyncing === sub.id} onClick={(e) => { e.stopPropagation(); toggleActive(sub); }}
+                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40 disabled:opacity-60">
                                                     <span className="material-icons-round text-sm">{sub.active ? "pause" : "play_arrow"}</span>
                                                     {sub.active ? "Pausar" : "Activar"}
                                                 </button>
@@ -514,8 +556,8 @@ export default function SuscripcionesPage() {
                                                     className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-200 dark:hover:border-violet-800/40">
                                                     <span className="material-icons-round text-sm">edit</span>
                                                 </button>
-                                                <button onClick={(e) => { e.stopPropagation(); del(sub.id); }}
-                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-red-500 hover:border-red-200 dark:hover:border-red-800/40">
+                                                <button disabled={isDeleting === sub.id} onClick={(e) => { e.stopPropagation(); del(sub.id); }}
+                                                    className="py-2.5 px-4 rounded-xl text-xs font-bold transition-all bg-white/60 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-white/10 hover:text-red-500 hover:border-red-200 dark:hover:border-red-800/40 disabled:opacity-60">
                                                     <span className="material-icons-round text-sm">delete_outline</span>
                                                 </button>
                                             </div>
@@ -734,9 +776,9 @@ export default function SuscripcionesPage() {
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-                        <button type="submit" className="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-all active:scale-[0.97]">
-                            {editing ? "Guardar" : "Crear"}
+                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
+                        <button type="submit" className="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold shadow-lg shadow-violet-500/20 transition-all active:scale-[0.97] disabled:opacity-60" disabled={isSaving}>
+                            {isSaving ? "Guardando..." : editing ? "Guardar" : "Crear"}
                         </button>
                     </div>
                 </form>

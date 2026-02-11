@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import type { Account, Income } from "../lib/types";
+import { apiGet, apiPost, normalizeApiError } from "../lib/api";
+import { incomeArraySchema, accountArraySchema } from "../lib/schemas";
+import { toastError, toastSuccess } from "../lib/toast";
 
 const FREQ: Record<string, string> = { monthly: "Mensual", biweekly: "Quincenal", weekly: "Semanal" };
 const FREQ_MONTHLY: Record<string, number> = { monthly: 1, biweekly: 2, weekly: 4.33 };
@@ -84,6 +87,9 @@ export default function IngresosPage() {
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<Income | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState<string | null>(null);
     const [form, setForm] = useState({
         name: "", amount: "", frequency: "monthly", type: "fixed",
         nextDate: "", source: "", icon: "payments",
@@ -93,13 +99,16 @@ export default function IngresosPage() {
     /* ── Fetching ── */
     const fetchData = async () => {
         try {
-            const [incRes, accRes] = await Promise.all([
-                fetch("/api/incomes"), fetch("/api/accounts"),
+            const [inc, acc] = await Promise.all([
+                apiGet("/api/incomes", incomeArraySchema),
+                apiGet("/api/accounts", accountArraySchema),
             ]);
-            const [inc, acc] = await Promise.all([incRes.json(), accRes.json()]);
             setIncomes(Array.isArray(inc) ? inc : []);
             setAccounts(Array.isArray(acc) ? acc : []);
-        } catch { /* empty */ } finally { setLoading(false); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally { setLoading(false); }
     };
     useEffect(() => { fetchData(); }, []);
 
@@ -124,27 +133,46 @@ export default function IngresosPage() {
     };
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSaving(true);
         try {
             const url = editing ? `/api/incomes/${editing.id}` : "/api/incomes";
-            const res = await fetch(url, { method: editing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-            if (!res.ok) throw new Error("Error al guardar");
+            await apiPost(url, form, undefined, editing ? "PUT" : "POST");
+            toastSuccess(editing ? "Ingreso actualizado" : "Ingreso creado");
             setModalOpen(false);
             fetchData();
-        } catch { alert("Error al guardar el ingreso. Intenta de nuevo."); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSaving(false);
+        }
     };
     const del = async (id: string) => {
         if (!confirm("¿Eliminar este ingreso?")) return;
+        setIsDeleting(id);
         try {
-            const res = await fetch(`/api/incomes/${id}`, { method: "DELETE" });
-            if (!res.ok) throw new Error("Error al eliminar");
+            await apiPost(`/api/incomes/${id}`, null, undefined, "DELETE");
+            toastSuccess("Ingreso eliminado");
             fetchData();
-        } catch { alert("Error al eliminar el ingreso."); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsDeleting(null);
+        }
     };
     const toggleActive = async (i: Income) => {
+        setIsSyncing(i.id);
         try {
-            await fetch(`/api/incomes/${i.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !i.active }) });
+            await apiPost(`/api/incomes/${i.id}`, { active: !i.active }, undefined, "PUT");
+            toastSuccess(i.active ? "Ingreso pausado" : "Ingreso activado");
             fetchData();
-        } catch { alert("Error al actualizar el ingreso."); }
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
+        } finally {
+            setIsSyncing(null);
+        }
     };
 
     /* ── Loading ── */
@@ -341,10 +369,10 @@ export default function IngresosPage() {
                                 </div>
 
                                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-white dark:bg-slate-800 shadow-lg rounded-lg border border-slate-100 dark:border-slate-700 p-1 flex gap-1">
-                                    <button onClick={() => toggleActive(inc)} className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-emerald-600">
+                                    <button disabled={isSyncing === inc.id} onClick={() => toggleActive(inc)} className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-emerald-600 disabled:opacity-60">
                                         <span className="material-icons-round text-lg">{inc.active ? "pause" : "play_arrow"}</span>
                                     </button>
-                                    <button onClick={() => del(inc.id)} className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500">
+                                    <button disabled={isDeleting === inc.id} onClick={() => del(inc.id)} className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 disabled:opacity-60">
                                         <span className="material-icons-round text-lg">delete</span>
                                     </button>
                                 </div>
@@ -439,8 +467,10 @@ export default function IngresosPage() {
 
                     {/* Actions */}
                     <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1">Cancelar</button>
-                        <button type="submit" className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all">{editing ? "Guardar" : "Crear"}</button>
+                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
+                        <button type="submit" className="flex-1 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-60" disabled={isSaving}>
+                            {isSaving ? "Guardando..." : editing ? "Guardar" : "Crear"}
+                        </button>
                     </div>
                 </form>
             </Modal>

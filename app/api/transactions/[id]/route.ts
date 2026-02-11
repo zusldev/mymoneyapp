@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { parseAmountInput, txDto } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,17 +13,10 @@ export async function GET(
     try {
         const transaction = await prisma.transaction.findUnique({ where: { id } });
         if (!transaction) return NextResponse.json({ error: "Transacción no encontrada" }, { status: 404 });
-        return NextResponse.json(transaction);
+        return NextResponse.json(txDto(transaction));
     } catch (error) {
         console.error("Error fetching transaction:", error);
-        return NextResponse.json({
-            id,
-            amount: 0,
-            type: "expense",
-            date: new Date().toISOString(),
-            merchant: "Fallback Merchant",
-            category: "otros"
-        });
+        return NextResponse.json({ ok: false, error: "Error al cargar transacción" }, { status: 500 });
     }
 }
 
@@ -40,7 +34,7 @@ export async function PUT(
         const transaction = await prisma.transaction.update({
             where: { id },
             data: {
-                amount: body.amount !== undefined ? parseFloat(body.amount) : undefined,
+                amountCents: body.amount !== undefined ? parseAmountInput(body.amount) : undefined,
                 type: body.type,
                 date: body.date ? new Date(body.date) : undefined,
                 merchant: body.merchant,
@@ -50,7 +44,7 @@ export async function PUT(
             },
         });
 
-        return NextResponse.json(transaction);
+        return NextResponse.json(txDto(transaction));
     } catch (error) {
         console.error("Error updating transaction:", error);
         return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });

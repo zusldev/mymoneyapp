@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { ChatMessage as Message } from "../lib/types";
+import { apiGet, apiPost, normalizeApiError } from "../lib/api";
+import { toastError } from "../lib/toast";
+import { chatMessageArraySchema } from "../lib/schemas";
 
 const quickActions = [
     { label: "¿Puedo gastar $500 hoy?", icon: "shopping_cart" },
@@ -17,7 +20,13 @@ export default function AsistentePage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        fetch("/api/chat").then(r => r.json()).then(setMessages).finally(() => setLoadingHistory(false));
+        apiGet("/api/chat", chatMessageArraySchema)
+            .then(setMessages)
+            .catch((error) => {
+                const failure = normalizeApiError(error);
+                toastError(failure.error);
+            })
+            .finally(() => setLoadingHistory(false));
     }, []);
 
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -29,15 +38,16 @@ export default function AsistentePage() {
         setInput("");
         setLoading(true);
         try {
-            const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
-            const data = await res.json();
+            const data = await apiPost<{ message?: string; error?: string }>("/api/chat", { message: text });
             if (data.error) {
                 setMessages(prev => [...prev, { id: (new Date().getTime() + 1).toString(), role: "assistant", content: `⚠️ ${data.error}`, createdAt: new Date().toISOString() }]);
             } else {
-                const aiMsg: Message = { id: (new Date().getTime() + 1).toString(), role: "assistant", content: data.message, createdAt: new Date().toISOString() };
+                const aiMsg: Message = { id: (new Date().getTime() + 1).toString(), role: "assistant", content: data.message ?? "No recibí respuesta del asistente.", createdAt: new Date().toISOString() };
                 setMessages(prev => [...prev, aiMsg]);
             }
-        } catch {
+        } catch (error) {
+            const failure = normalizeApiError(error);
+            toastError(failure.error);
             setMessages(prev => [...prev, { id: (new Date().getTime() + 1).toString(), role: "assistant", content: "Error al conectar con el asistente.", createdAt: new Date().toISOString() }]);
         }
         setLoading(false);

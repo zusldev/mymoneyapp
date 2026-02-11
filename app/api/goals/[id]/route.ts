@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
+import { goalDto, parseAmountInput } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -18,15 +19,15 @@ export async function PUT(
             where: { id },
             data: {
                 name: body.name,
-                targetAmount: body.targetAmount !== undefined ? parseFloat(body.targetAmount) : undefined,
-                currentAmount: body.currentAmount !== undefined ? parseFloat(body.currentAmount) : undefined,
+                targetAmountCents: body.targetAmount !== undefined ? parseAmountInput(body.targetAmount) : undefined,
+                currentAmountCents: body.currentAmount !== undefined ? parseAmountInput(body.currentAmount) : undefined,
                 deadline: body.deadline ? new Date(body.deadline) : undefined,
                 priority: body.priority,
                 color: body.color,
                 icon: body.icon,
             },
         });
-        return NextResponse.json(goal);
+        return NextResponse.json(goalDto(goal));
     } catch (error) {
         console.error("Error updating goal:", error);
         return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });
