@@ -1,5 +1,5 @@
 import { prisma } from "@/app/lib/prisma";
-import { cardDto, parseAmountInput } from "@/app/lib/serverMoney";
+import { cardDto, majorFromCents, parseAmountInput } from "@/app/lib/serverMoney";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -22,18 +22,23 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
+        const creditLimitCents = parseAmountInput(body.creditLimit);
+        const balanceCents = parseAmountInput(body.balance ?? 0);
+        const data = {
+            name: body.name,
+            bank: body.bank || "",
+            lastFour: body.lastFour || "",
+            credit_limit: majorFromCents(creditLimitCents),
+            balance: majorFromCents(balanceCents),
+            creditLimitCents,
+            balanceCents,
+            cutDate: parseInt(body.cutDate) || 1,
+            payDate: parseInt(body.payDate) || 20,
+            apr: parseFloat(body.apr) || 0,
+            color: body.color || "#8b5cf6",
+        };
         const card = await prisma.creditCard.create({
-            data: {
-                name: body.name,
-                bank: body.bank || "",
-                lastFour: body.lastFour || "",
-                creditLimitCents: parseAmountInput(body.creditLimit),
-                balanceCents: parseAmountInput(body.balance ?? 0),
-                cutDate: parseInt(body.cutDate) || 1,
-                payDate: parseInt(body.payDate) || 20,
-                apr: parseFloat(body.apr) || 0,
-                color: body.color || "#8b5cf6",
-            },
+            data,
         });
         return NextResponse.json(cardDto(card), { status: 201 });
     } catch (error) {
