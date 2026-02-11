@@ -171,6 +171,8 @@ If any step fails, fix the issue and retry before moving to the next step.
 - `npm run lint`
 - `npm test`
 - `npm run build`
+- Required GitHub checks on PRs to `develop` and `master`: `CI / lint`, `CI / test`, `CI / build`.
+- Never merge while any required check is `pending` or `failed`.
 
 If a gate cannot run, report why in PR description.
 
