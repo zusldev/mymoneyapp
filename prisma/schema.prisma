@@ -7,45 +7,49 @@ datasource db {
 }
 
 model Account {
-  id           String        @id @default(cuid())
-  name         String
-  type         String
-  balanceCents Int           @default(0) @map("balance_cents")
-  currency     String        @default("MXN")
-  color        String        @default("#06b6d4")
-  icon         String        @default("wallet")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  transactions Transaction[]
-  incomes      Income[]
+  id            String         @id @default(cuid())
+  name          String
+  type          String
+  balance       Float          @default(0)
+  currency      String         @default("MXN")
+  color         String         @default("#06b6d4")
+  icon          String         @default("wallet")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  balanceCents  Int            @default(0) @map("balance_cents")
+  incomes       Income[]
   subscriptions Subscription[]
+  transactions  Transaction[]
 
   @@map("accounts")
 }
 
 model CreditCard {
-  id           String        @id @default(cuid())
-  name         String
-  bank         String        @default("")
-  lastFour     String        @default("") @map("last_four")
-  creditLimitCents Int       @map("credit_limit_cents")
-  balanceCents Int           @default(0) @map("balance_cents")
-  cutDate      Int           @default(1) @map("cut_date")
-  payDate      Int           @default(20) @map("pay_date")
-  apr          Float         @default(0)
-  color        String        @default("#8b5cf6")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  transactions Transaction[]
-  incomes      Income[]
-  subscriptions Subscription[]
+  id               String         @id @default(cuid())
+  name             String
+  bank             String         @default("")
+  lastFour         String         @default("") @map("last_four")
+  credit_limit     Float
+  balance          Float          @default(0)
+  cutDate          Int            @default(1) @map("cut_date")
+  payDate          Int            @default(20) @map("pay_date")
+  apr              Float          @default(0)
+  color            String         @default("#8b5cf6")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  creditLimitCents Int            @map("credit_limit_cents")
+  balanceCents     Int            @default(0) @map("balance_cents")
+  incomes          Income[]
+  subscriptions    Subscription[]
+  transactions     Transaction[]
 
   @@map("credit_cards")
 }
 
 model Transaction {
   id                 String        @id @default(cuid())
-  amountCents        Int           @map("amount_cents")
+  /// Legacy major-unit mirror column in DB. Never use for calculations.
+  legacyAmount       Float?        @map("amount")
   type               String
   date               DateTime      @default(now())
   merchant           String        @default("")
@@ -56,13 +60,14 @@ model Transaction {
   isFeeOrInterest    Boolean       @default(false) @map("is_fee_or_interest")
   confidenceScore    Int           @default(100) @map("confidence_score")
   accountId          String?       @map("account_id")
-  account            Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   creditCardId       String?       @map("credit_card_id")
-  creditCard         CreditCard?   @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
   subscriptionId     String?       @map("subscription_id")
-  subscription       Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
+  amountCents        Int           @map("amount_cents")
+  account            Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  creditCard         CreditCard?   @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+  subscription       Subscription? @relation(fields: [subscriptionId], references: [id])
 
   @@index([date])
   @@index([category])
@@ -74,20 +79,22 @@ model Transaction {
 model Subscription {
   id           String        @id @default(cuid())
   name         String
-  amountCents  Int           @map("amount_cents")
+  /// Legacy major-unit mirror column in DB. Never use for calculations.
+  legacyAmount Float?        @map("amount")
   frequency    String        @default("monthly")
   category     String        @default("suscripciones")
-  type         String        @default("entertainment")
   nextDate     DateTime      @map("next_date")
   active       Boolean       @default(true)
   color        String        @default("#f59e0b")
-  icon         String        @default("sync")
-  accountId    String?       @map("account_id")
-  account      Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  creditCardId String?       @map("credit_card_id")
-  creditCard   CreditCard?   @relation(fields: [creditCardId], references: [id], onDelete: SetNull)
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
+  accountId    String?       @map("account_id")
+  creditCardId String?       @map("credit_card_id")
+  icon         String        @default("sync")
+  type         String        @default("entertainment")
+  amountCents  Int           @map("amount_cents")
+  account      Account?      @relation(fields: [accountId], references: [id])
+  creditCard   CreditCard?   @relation(fields: [creditCardId], references: [id])
   transactions Transaction[]
 
   @@map("subscriptions")
@@ -96,35 +103,39 @@ model Subscription {
 model Income {
   id           String      @id @default(cuid())
   name         String
-  amountCents  Int         @map("amount_cents")
+  /// Legacy major-unit mirror column in DB. Never use for calculations.
+  legacyAmount Float?      @map("amount")
   frequency    String      @default("monthly")
-  type         String      @default("fixed")
   nextDate     DateTime    @map("next_date")
   source       String      @default("")
   active       Boolean     @default(true)
-  color        String      @default("#2badee")
-  icon         String      @default("payments")
-  accountId    String?     @map("account_id")
-  account      Account?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  creditCardId String?     @map("credit_card_id")
-  creditCard   CreditCard? @relation(fields: [creditCardId], references: [id], onDelete: SetNull)
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
+  accountId    String?     @map("account_id")
+  color        String      @default("#2badee")
+  creditCardId String?     @map("credit_card_id")
+  icon         String      @default("payments")
+  type         String      @default("fixed")
+  amountCents  Int         @map("amount_cents")
+  account      Account?    @relation(fields: [accountId], references: [id])
+  creditCard   CreditCard? @relation(fields: [creditCardId], references: [id])
 
   @@map("incomes")
 }
 
 model FinancialGoal {
-  id            String   @id @default(cuid())
-  name          String
-  targetAmountCents  Int @map("target_amount_cents")
-  currentAmountCents Int @default(0) @map("current_amount_cents")
-  deadline      DateTime
-  priority      String   @default("medium")
-  color         String   @default("#10b981")
-  icon          String   @default("target")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id                 String   @id @default(cuid())
+  name               String
+  target_amount      Float
+  current_amount     Float    @default(0)
+  deadline           DateTime
+  priority           String   @default("medium")
+  color              String   @default("#10b981")
+  icon               String   @default("target")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  targetAmountCents  Int      @map("target_amount_cents")
+  currentAmountCents Int      @default(0) @map("current_amount_cents")
 
   @@map("financial_goals")
 }

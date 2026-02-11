@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { formatCurrency } from "../lib/financialEngine";
 import type { Goal } from "../lib/types";
@@ -17,6 +18,7 @@ export default function MetasPage() {
     const [now, setNow] = useState<number>(() => Date.now());
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
     const fetch_ = async () => {
         try {
@@ -51,8 +53,13 @@ export default function MetasPage() {
         }
     };
 
-    const del = async (id: string) => {
-        if (!confirm("¿Eliminar?")) return;
+    const requestDelete = (id: string) => {
+        setPendingDeleteId(id);
+    };
+
+    const del = async () => {
+        if (!pendingDeleteId) return;
+        const id = pendingDeleteId;
         setIsDeleting(id);
         try {
             await apiPost(`/api/goals/${id}`, null, undefined, "DELETE");
@@ -63,6 +70,7 @@ export default function MetasPage() {
             toastError(failure.error);
         } finally {
             setIsDeleting(null);
+            setPendingDeleteId(null);
         }
     };
 
@@ -116,10 +124,19 @@ export default function MetasPage() {
                                     </div>
                                 </div>
                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-[#2badee] transition-colors">
+                                    <button
+                                        aria-label={`Editar meta ${g.name}`}
+                                        onClick={() => openEdit(g)}
+                                        className="touch-target focus-ring p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-[#2badee] transition-colors"
+                                    >
                                         <span className="material-icons-round text-sm">edit</span>
                                     </button>
-                                    <button disabled={isDeleting === g.id} onClick={() => del(g.id)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-60">
+                                    <button
+                                        aria-label={`Eliminar meta ${g.name}`}
+                                        disabled={isDeleting === g.id}
+                                        onClick={() => requestDelete(g.id)}
+                                        className="touch-target focus-ring p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-60"
+                                    >
                                         <span className="material-icons-round text-sm">delete</span>
                                     </button>
                                 </div>
@@ -197,6 +214,15 @@ export default function MetasPage() {
                     </div>
                 </form>
             </Modal>
+            <ConfirmDialog
+                open={pendingDeleteId !== null}
+                title="Eliminar meta"
+                description="Esta acción eliminará la meta de forma permanente."
+                confirmText="Eliminar"
+                loading={isDeleting !== null}
+                onCancel={() => setPendingDeleteId(null)}
+                onConfirm={del}
+            />
         </div>
     );
 }

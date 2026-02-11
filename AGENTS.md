@@ -9,6 +9,32 @@ Repository-level operating rules for coding agents.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 - **Verify Before Done**: Never mark a task complete without proving it works.
 
+## Prisma Migration Safety
+
+- Never delete `prisma/migrations` in a project with existing data.
+- Never run `prisma migrate reset` unless explicitly approved and data loss is acceptable.
+- Never use `prisma db push` in production.
+- If migrations history is lost but DB contains data:
+  1. Generate a baseline using `prisma migrate diff --from-empty --to-schema`.
+  2. Mark it applied with `prisma migrate resolve --applied`.
+- Always verify `prisma migrate status` before and after changes.
+- Production uses `prisma migrate deploy`, never `migrate dev`.
+
+
+## Financial safety rules (non-negotiable)
+
+- All monetary values must use `*_cents` as the single source of truth.
+- Floating-point arithmetic is forbidden for money.
+- Decimal.js must be used for:
+  - divisions
+  - percentages
+  - ratio calculations
+- UI must format money only at render time.
+- Never mix `amount` and `amountCents`.
+- All new financial fields must follow the cents convention.
+- Any deviation must be justified explicitly.
+
+
 ## Efficiency rules (save tokens and requests)
 
 1. **Read big, write once**: Read 100+ lines at a time. Never read the same file twice in one turn.
@@ -22,6 +48,26 @@ Repository-level operating rules for coding agents.
 9. **Compute cost awareness**: Don't run heavy commands (build, test) if only docs, comments, or non-code files changed. Prefer static reasoning when possible.
 10. **Justified rule breaking**: Rules may be violated if a clear justification is stated and it reduces total cost or risk.
 
+## Regression prevention protocol
+
+Before modifying any file:
+
+1. Identify related components, shared types, and dependent logic.
+2. Check for:
+   - money calculations
+   - shared types from lib/types
+   - API schemas
+   - section identity system
+3. Confirm the change does not:
+   - break cents consistency
+   - reintroduce float math
+   - duplicate shared constants
+   - reintroduce layout repetition
+4. Prefer minimal diff over wide refactor.
+
+Never assume isolated change safety.
+
+
 ## Verification protocol
 
 After making changes, always verify before reporting completion:
@@ -30,6 +76,13 @@ After making changes, always verify before reporting completion:
 2. Run `npm test` — if tests fail, fix them. If new behavior was added, consider adding tests.
 3. Run `npm run build` — catch type errors and build issues.
 4. Ask yourself: "Would a staff engineer approve this?"
+5. Final mental checklist:
+   - Is money handling still consistent?
+   - Are shared types respected?
+   - Does mobile Safari remain smooth?
+   - Did I accidentally duplicate logic?
+   - Would a staff engineer approve this?
+
 
 Do not skip verification. If a gate cannot run, explain why.
 
@@ -43,13 +96,26 @@ When the user reports a bug:
 4. Run verification protocol after the fix.
 5. Zero context switching required from the user.
 
-## Self-improvement loop
+## Self-improvement loop (systemic)
 
-After ANY correction from the user:
+After ANY correction from the user OR detection of a bug:
 
-1. Open or create `tasks/lessons.md`.
-2. Add the pattern: what went wrong, why, and the rule to prevent it.
-3. Review lessons at the start of each session to avoid repeat mistakes.
+1. Identify the true root cause (not the surface symptom).
+2. Classify the error:
+   - Logic
+   - Financial
+   - UI/UX
+   - Architecture
+   - Performance
+   - Process
+3. Add entry in `tasks/lessons.md`.
+4. If the error was systemic:
+   - Update AGENTS with a preventive rule.
+5. Review `tasks/lessons.md` at the start of each session.
+
+The same class of mistake must never repeat twice.
+
+
 
 Format:
 
@@ -121,3 +187,29 @@ Use Conventional Commits:
 - `chore: ...`
 - `ci: ...`
 - `perf: ...`
+
+
+## Performance guardrail
+
+- Avoid stacking multiple heavy backdrop-filter layers.
+- Blur must be reduced on mobile when performance degrades.
+- Prefer transform/opacity animations over layout-affecting properties.
+- Avoid re-renders caused by unstable object/array props.
+- Memoize only when it reduces measurable re-renders.
+- Do not introduce performance optimizations without evidence.
+
+Performance > visual excess.
+
+## Section identity system (design consistency)
+
+Each section must differentiate in at least 3 of:
+- dominant color
+- layout structure
+- animation style
+- visual density
+- emotional tone
+
+Avoid repeating dashboard-style grids across sections.
+Liquid Glass may be dominant but must not erase section identity.
+
+If two sections feel visually similar, refactor before proceeding.

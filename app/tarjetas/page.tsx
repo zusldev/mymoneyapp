@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Modal } from "../components/Modal";
 import { formatCurrency, analyzeCreditCard } from "../lib/financialEngine";
 import type { CardData } from "../lib/types";
 import { apiGet, apiPost, normalizeApiError } from "../lib/api";
 import { toastError, toastSuccess } from "../lib/toast";
 import { creditCardArraySchema } from "../lib/schemas";
+import { parse, percentages, toMajorUnits } from "../lib/money";
 
 // Gradient presets for visual cards
 const CARD_GRADIENTS = [
@@ -20,6 +22,11 @@ const CARD_GRADIENTS = [
 
 const colorOptions = ["#8b5cf6", "#3b82f6", "#06b6d4", "#f59e0b", "#ef4444", "#ec4899", "#06d6a0"];
 
+function moneyCents(value: { amount?: number; amountCents?: number }) {
+    if (typeof value.amountCents === "number") return value.amountCents;
+    return parse(value.amount ?? 0);
+}
+
 export default function TarjetasPage() {
     const [cards, setCards] = useState<CardData[]>([]);
     const [loading, setLoading] = useState(true);
@@ -27,6 +34,7 @@ export default function TarjetasPage() {
     const [editingCard, setEditingCard] = useState<CardData | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [form, setForm] = useState({
         name: "", bank: "", lastFour: "", creditLimit: "", balance: "",
         cutDate: "1", payDate: "20", apr: "0", color: "#8b5cf6",
@@ -46,9 +54,11 @@ export default function TarjetasPage() {
 
     useEffect(() => { fetchCards(); }, []);
 
-    const totalDebt = cards.reduce((sum, c) => sum + c.balance, 0);
-    const totalLimit = cards.reduce((sum, c) => sum + c.creditLimit, 0);
-    const globalUtilization = totalLimit > 0 ? (totalDebt / totalLimit) * 100 : 0;
+    const totalDebtCents = cards.reduce((sum, c) => sum + moneyCents({ amount: c.balance, amountCents: c.balanceCents }), 0);
+    const totalLimitCents = cards.reduce((sum, c) => sum + moneyCents({ amount: c.creditLimit, amountCents: c.creditLimitCents }), 0);
+    const totalDebt = toMajorUnits(totalDebtCents);
+    const totalLimit = toMajorUnits(totalLimitCents);
+    const globalUtilization = percentages(totalDebtCents, totalLimitCents, { clamp: true, decimals: 2 });
 
     const openCreate = () => {
         setEditingCard(null);
@@ -60,7 +70,8 @@ export default function TarjetasPage() {
         setEditingCard(card);
         setForm({
             name: card.name, bank: card.bank, lastFour: card.lastFour,
-            creditLimit: card.creditLimit.toString(), balance: card.balance.toString(),
+            creditLimit: toMajorUnits(moneyCents({ amount: card.creditLimit, amountCents: card.creditLimitCents })).toString(),
+            balance: toMajorUnits(moneyCents({ amount: card.balance, amountCents: card.balanceCents })).toString(),
             cutDate: card.cutDate.toString(), payDate: card.payDate.toString(),
             apr: card.apr.toString(), color: card.color,
         });
@@ -85,8 +96,13 @@ export default function TarjetasPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("¿Eliminar esta tarjeta?")) return;
+    const requestDelete = (id: string) => {
+        setPendingDeleteId(id);
+    };
+
+    const handleDelete = async () => {
+        if (!pendingDeleteId) return;
+        const id = pendingDeleteId;
         setIsDeleting(id);
         try {
             await apiPost(`/api/credit-cards/${id}`, null, undefined, "DELETE");
@@ -97,6 +113,7 @@ export default function TarjetasPage() {
             toastError(failure.error);
         } finally {
             setIsDeleting(null);
+            setPendingDeleteId(null);
         }
     };
 
@@ -208,14 +225,14 @@ export default function TarjetasPage() {
                                         </div>
                                         {/* Edit/Delete buttons */}
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button aria-label={`Editar ${card.name}`} onClick={() => openEdit(card)} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors">
+                                            <button aria-label={`Editar ${card.name}`} onClick={() => openEdit(card)} className="touch-target focus-ring p-1.5 rounded-lg hover:bg-white/20 transition-colors">
                                                 <span className="material-icons-round text-sm">edit</span>
                                             </button>
                                             <button
                                                 aria-label={`Eliminar ${card.name}`}
                                                 disabled={isDeleting === card.id}
-                                                onClick={() => handleDelete(card.id)}
-                                                className="p-1.5 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-60"
+                                                onClick={() => requestDelete(card.id)}
+                                                className="touch-target focus-ring p-1.5 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-60"
                                             >
                                                 <span className="material-icons-round text-sm">delete</span>
                                             </button>
@@ -244,11 +261,11 @@ export default function TarjetasPage() {
                                     <div className="flex justify-between items-center mb-4">
                                         <div>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Saldo Actual</p>
-                                            <p className="text-lg font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(card.balance)}</p>
+                                            <p className="text-lg font-bold text-slate-900 dark:text-white tabular-nums">{formatCurrency(toMajorUnits(moneyCents({ amount: card.balance, amountCents: card.balanceCents })))}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase">Límite</p>
-                                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{formatCurrency(card.creditLimit)}</p>
+                                            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{formatCurrency(toMajorUnits(moneyCents({ amount: card.creditLimit, amountCents: card.creditLimitCents })))}</p>
                                         </div>
                                     </div>
 
@@ -343,6 +360,15 @@ export default function TarjetasPage() {
                     </div>
                 </form>
             </Modal>
+            <ConfirmDialog
+                open={pendingDeleteId !== null}
+                title="Eliminar tarjeta"
+                description="Esta acción eliminará la tarjeta seleccionada."
+                confirmText="Eliminar"
+                loading={isDeleting !== null}
+                onCancel={() => setPendingDeleteId(null)}
+                onConfirm={handleDelete}
+            />
         </div>
     );
 }
