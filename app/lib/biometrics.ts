@@ -92,7 +92,8 @@ export async function verifyBiometric(): Promise<boolean> {
         const credential = (await navigator.credentials.get({
             publicKey: {
                 challenge,
-                allowCredentials: [{ id: idBytes, type: "public-key" }],
+                // Cast id to any to avoid Uint8Array vs BufferSource mismatch in TS strict mode
+                allowCredentials: [{ id: idBytes as any, type: "public-key" }],
                 userVerification: "required",
                 timeout: 60000,
             },
