@@ -382,8 +382,8 @@ export default function CuentasPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {insights.map((ins, i) => (
                             <div key={i} className={`liquid-glass rounded-xl p-4 liquid-settle ${ins.severity === "warn" ? "!border-amber-300/30 dark:!border-amber-700/20" :
-                                    ins.severity === "tip" ? "!border-teal-300/30 dark:!border-teal-700/20" :
-                                        "!border-emerald-300/30 dark:!border-emerald-700/20"
+                                ins.severity === "tip" ? "!border-teal-300/30 dark:!border-teal-700/20" :
+                                    "!border-emerald-300/30 dark:!border-emerald-700/20"
                                 }`} style={{ animationDelay: `${400 + i * 80}ms` }}>
                                 <div className="flex items-start gap-3">
                                     <span className={`material-icons-round text-lg mt-0.5 ${ins.severity === "warn" ? "text-amber-500" : ins.severity === "tip" ? "text-teal-500" : "text-emerald-500"
@@ -461,44 +461,100 @@ export default function CuentasPage() {
 
             {/* ═══════════ MODAL ═══════════ */}
             <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingAccount ? "Editar Cuenta" : "Nueva Cuenta"}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Nombre</label>
-                        <input className="input-field" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ej: BBVA Nómina" required />
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Name Input - Floating Glass */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Nombre de la cuenta</label>
+                        <input
+                            className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm"
+                            value={form.name}
+                            onChange={e => setForm({ ...form, name: e.target.value })}
+                            placeholder="Ej: BBVA Nómina"
+                            required
+                        />
                     </div>
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Tipo</label>
-                        <div className="grid grid-cols-2 gap-2">
+
+                    {/* Balance Input - Large & Central */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Balance actual</label>
+                        <div className="relative group">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium group-focus-within:text-teal-500 transition-colors">$</span>
+                            <input
+                                className="w-full pl-8 pr-4 py-4 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-2xl text-2xl font-bold text-slate-900 dark:text-white placeholder:text-slate-300 focus:ring-2 focus:ring-teal-500/50 transition-all backdrop-blur-sm tabular-nums"
+                                type="number"
+                                step="0.01"
+                                value={form.balance}
+                                onChange={e => setForm({ ...form, balance: e.target.value })}
+                                placeholder="0.00"
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    {/* Type Selector - Glass Tiles */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Tipo de cuenta</label>
+                        <div className="grid grid-cols-2 gap-3">
                             {(["checking", "savings", "cash", "investment"] as const).map(t => (
-                                <button key={t} type="button" onClick={() => setForm({ ...form, type: t })}
-                                    className={`py-2.5 rounded-xl text-xs font-semibold transition-all border flex items-center justify-center gap-2 ${form.type === t
-                                            ? "border-teal-400/50 bg-teal-500/10 text-teal-700 dark:text-teal-300"
-                                            : "border-slate-200/60 dark:border-white/10 text-slate-500"
-                                        }`}>
-                                    <span className="material-icons-round text-[15px]">{typeIcons[t]}</span>
-                                    {typeLabels[t]}
+                                <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => setForm({ ...form, type: t })}
+                                    className={`relative p-3 rounded-2xl border transition-all duration-300 flex flex-col items-center gap-2 group ${form.type === t
+                                        ? "bg-teal-500/10 border-teal-500/50 shadow-[0_0_20px_rgba(20,184,166,0.15)]"
+                                        : "bg-white/40 dark:bg-slate-800/40 border-slate-200/50 dark:border-white/5 hover:bg-white/60 dark:hover:bg-slate-800/60"
+                                        }`}
+                                >
+                                    <span className={`material-icons-round text-2xl transition-colors ${form.type === t ? "text-teal-500" : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"}`}>
+                                        {typeIcons[t]}
+                                    </span>
+                                    <span className={`text-xs font-semibold transition-colors ${form.type === t ? "text-teal-700 dark:text-teal-300" : "text-slate-600 dark:text-slate-400"}`}>
+                                        {typeLabels[t]}
+                                    </span>
+                                    {form.type === t && (
+                                        <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                                    )}
                                 </button>
                             ))}
                         </div>
                     </div>
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Balance actual</label>
-                        <input className="input-field" type="number" step="0.01" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} placeholder="0.00" required />
-                    </div>
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Color</label>
-                        <div className="flex gap-2 flex-wrap">
+
+                    {/* Color Picker - Improved */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Color representativo</label>
+                        <div className="flex gap-3 flex-wrap p-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl backdrop-blur-sm">
                             {colorOptions.map(c => (
-                                <button key={c} type="button" onClick={() => setForm({ ...form, color: c })}
-                                    className={`w-8 h-8 rounded-xl transition-all ${form.color === c ? "ring-2 ring-offset-2 ring-teal-400 scale-110" : "hover:scale-105"}`}
-                                    style={{ backgroundColor: c }} />
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setForm({ ...form, color: c })}
+                                    className={`w-9 h-9 rounded-full transition-all duration-300 flex items-center justify-center ${form.color === c ? "ring-2 ring-offset-2 ring-offset-white dark:ring-offset-[#1a262d] scale-110 shadow-lg" : "hover:scale-110 opacity-70 hover:opacity-100"}`}
+                                    style={{ backgroundColor: c, boxShadow: form.color === c ? `0 0 15px ${c}60` : undefined }}
+                                >
+                                    {form.color === c && <span className="material-icons-round text-white text-base">check</span>}
+                                </button>
                             ))}
                         </div>
                     </div>
-                    <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
-                        <button type="submit" className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.97]" style={{ background: T[500] }}>
-                            {isSaving ? "Guardando..." : editingAccount ? "Guardar" : "Crear"}
+
+                    {/* Actions */}
+                    <div className="flex gap-4 pt-4">
+                        <button
+                            type="button"
+                            onClick={() => setModalOpen(false)}
+                            className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            disabled={isSaving}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            className="flex-[2] py-3 px-4 rounded-xl text-sm font-bold text-white shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 transition-all active:scale-[0.98] relative overflow-hidden group"
+                            style={{ background: `linear-gradient(135deg, ${T[500]}, ${T[600]})` }}
+                            disabled={isSaving}
+                        >
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                            <span className="relative">{isSaving ? "Guardando..." : editingAccount ? "Guardar Cambios" : "Crear Cuenta"}</span>
                         </button>
                     </div>
                 </form>

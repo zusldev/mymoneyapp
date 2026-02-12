@@ -149,7 +149,7 @@ function detectAnomalies(txs: Transaction[]): Anomaly[] {
         for (const t of expenses) {
             const txCents = Math.abs(amountCentsOf(t));
             if (txCents > avg * 3) {
-                a.push({ txId: t.id, type: "spike", label: `Gasto inusual: ${Math.round(txCents / avg)}x el promedio`, severity: "warn" });
+                a.push({ txId: t.id, type: "spike", label: `Gasto inusual: ${Math.round(txCents / avg)}x el promedio`, severity: "warning" });
             }
         }
     }
@@ -168,7 +168,7 @@ function detectAnomalies(txs: Transaction[]): Anomaly[] {
     // Fees / interest
     for (const t of txs) {
         if (t.isFeeOrInterest && Math.abs(amountCentsOf(t)) > parse(200)) {
-            a.push({ txId: t.id, type: "fee", label: "Comisión/interés alto", severity: "warn" });
+            a.push({ txId: t.id, type: "fee", label: "Comisión/interés alto", severity: "warning" });
         }
     }
 
@@ -220,7 +220,16 @@ export default function TransaccionesPage() {
         } finally { setLoading(false); }
     }, [filterCategory, filterType, filterAccount]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        fetchData();
+        // Check URL for "new=true" to open modal automatically
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("new") === "true") {
+            setModalOpen(true);
+            // Optional: clear the param so it doesn't reopen on refresh, but for now keep it simple or use replaceState
+            window.history.replaceState({}, "", "/transacciones");
+        }
+    }, [fetchData]);
 
     /* ── CRUD ── */
     const handleSubmit = async (e: React.FormEvent) => {
@@ -670,81 +679,204 @@ export default function TransaccionesPage() {
 
             {/* ═══════════ MODAL ═══════════ */}
             <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nueva Transacción">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Monto</label>
-                            <input className="input-field" type="number" step="0.01" value={form.amount}
-                                onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0.00" required />
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Amount Input - Hero Style */}
+                    <div className="relative group flex justify-center py-4">
+                        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/20 to-blue-500/20 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
+                        <div className="relative flex items-center">
+                            <span className="text-4xl font-light text-slate-400 mr-2">$</span>
+                            <input
+                                className="w-full max-w-[240px] bg-transparent border-0 text-center text-5xl font-bold text-slate-900 dark:text-white placeholder:text-slate-300 focus:ring-0 p-0 tabular-nums"
+                                type="number"
+                                step="0.01"
+                                value={form.amount}
+                                onChange={e => setForm({ ...form, amount: e.target.value })}
+                                placeholder="0.00"
+                                autoFocus
+                                required
+                            />
                         </div>
-                        <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Tipo</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button type="button" onClick={() => setForm({ ...form, type: "expense" })}
-                                    className={`py-2 rounded-lg text-xs font-semibold transition-all border ${form.type === "expense" ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" : "bg-white dark:bg-[#1a262d] text-slate-500 border-slate-200 dark:border-slate-700"}`}>
-                                    Gasto
-                                </button>
-                                <button type="button" onClick={() => setForm({ ...form, type: "income" })}
-                                    className={`py-2 rounded-lg text-xs font-semibold transition-all border ${form.type === "income" ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800" : "bg-white dark:bg-[#1a262d] text-slate-500 border-slate-200 dark:border-slate-700"}`}>
-                                    Ingreso
-                                </button>
+                    </div>
+
+                    {/* Type Toggle - Glass Segmented Control */}
+                    <div className="flex p-1.5 bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl backdrop-blur-sm relative">
+                        <div
+                            className={`absolute inset-y-1.5 w-[calc(50%-6px)] rounded-xl bg-white dark:bg-slate-700 shadow-sm transition-all duration-300 ease-out ${form.type === "income" ? "translate-x-[calc(100%+6px)]" : "translate-x-0"}`}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setForm({ ...form, type: "expense" })}
+                            className={`flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors ${form.type === "expense" ? "text-red-500" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}
+                        >
+                            Gasto
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setForm({ ...form, type: "income" })}
+                            className={`flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors ${form.type === "income" ? "text-emerald-500" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}
+                        >
+                            Ingreso
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* Date & Merchant */}
+                        <div className="space-y-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Fecha</label>
+                                <input
+                                    type="date"
+                                    className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm"
+                                    value={form.date}
+                                    onChange={e => setForm({ ...form, date: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Comercio</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons-round text-slate-400 text-lg">storefront</span>
+                                    <input
+                                        className="w-full pl-11 pr-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm"
+                                        value={form.merchant}
+                                        onChange={e => setForm({ ...form, merchant: e.target.value })}
+                                        placeholder="OXXO, Amazon..."
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Category Selector */}
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Categoría</label>
+                            <div className="relative group">
+                                <select
+                                    className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm cursor-pointer"
+                                    value={form.category}
+                                    onChange={e => setForm({ ...form, category: e.target.value })}
+                                >
+                                    {CATEGORY_KEYS.map(k => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
+                                </select>
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none material-icons-round">expand_more</span>
+                                {/* Visual indicator of selected category */}
+                                <div className="absolute right-10 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center pointer-events-none"
+                                    style={{ background: CATEGORIES[form.category as CategoryKey]?.color || CATEGORIES.otros.color }}>
+                                    <span className="material-icons-round text-[10px] text-white">
+                                        {CATEGORIES[form.category as CategoryKey]?.icon || CATEGORIES.otros.icon}
+                                    </span>
+                                </div>
+                            </div>
+                            {/* Quick bubbles for common categories */}
+                            <div className="flex gap-2 overflow-x-auto py-1 hide-scrollbar">
+                                {["comida", "transporte", "supermercado", "hogar"].map(k => (
+                                    <button
+                                        key={k}
+                                        type="button"
+                                        onClick={() => setForm({ ...form, category: k })}
+                                        className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1.5 ${form.category === k
+                                            ? "bg-slate-800 text-white dark:bg-white dark:text-slate-900 border-transparent"
+                                            : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                            }`}
+                                    >
+                                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: CATEGORIES[k as CategoryKey]?.color }} />
+                                        {CATEGORIES[k as CategoryKey]?.label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Fecha</label>
-                            <input className="input-field" type="date" value={form.date}
-                                onChange={e => setForm({ ...form, date: e.target.value })} required />
-                        </div>
-                        <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Categoría</label>
-                            <select className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                                {CATEGORY_KEYS.map(k => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
-                            </select>
-                        </div>
+
+                    {/* Description - Optional */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Nota (opcional)</label>
+                        <input
+                            className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm"
+                            value={form.description}
+                            onChange={e => setForm({ ...form, description: e.target.value })}
+                            placeholder="Detalles adicionales..."
+                        />
                     </div>
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Comercio</label>
-                        <input className="input-field" value={form.merchant} onChange={e => setForm({ ...form, merchant: e.target.value })} placeholder="OXXO, Amazon, Spotify..." />
-                    </div>
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">Descripción (opcional)</label>
-                        <input className="input-field" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Notas adicionales" />
-                    </div>
-                    {/* Payment method */}
-                    <div>
-                        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">Método de pago</label>
-                        <div className="grid grid-cols-1 gap-2 max-h-36 overflow-y-auto pr-1">
-                            <button type="button" onClick={() => setForm({ ...form, accountId: "", creditCardId: "" })}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left border transition-all text-xs ${!form.accountId && !form.creditCardId ? "border-[#2badee] bg-[#2badee]/5" : "border-slate-200 dark:border-slate-700"}`}>
-                                <span className="material-icons-round text-slate-400 text-lg">remove_circle_outline</span>
-                                <span className="text-slate-600 dark:text-slate-300 font-medium">Sin especificar</span>
+
+                    {/* Payment Method - Horizontal Scroll Cards */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Método de pago</label>
+                        <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar -mx-1 px-1">
+                            {/* None option */}
+                            <button
+                                type="button"
+                                onClick={() => setForm({ ...form, accountId: "", creditCardId: "" })}
+                                className={`shrink-0 flex flex-col items-center justify-center w-24 h-20 rounded-2xl border-2 transition-all duration-300 gap-1 ${!form.accountId && !form.creditCardId
+                                    ? "bg-slate-800 dark:bg-white border-transparent shadow-lg text-white dark:text-slate-900 scale-105"
+                                    : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 text-slate-400 hover:bg-slate-50"
+                                    }`}
+                            >
+                                <span className="material-icons-round text-2xl">money_off</span>
+                                <span className="text-[10px] font-bold">Ninguno</span>
                             </button>
+
+                            {/* Accounts */}
                             {accounts.map(a => (
-                                <button key={a.id} type="button" onClick={() => setForm({ ...form, accountId: a.id, creditCardId: "" })}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left border transition-all text-xs ${form.accountId === a.id ? "border-[#2badee] bg-[#2badee]/5" : "border-slate-200 dark:border-slate-700"}`}>
-                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${a.color}20` }}>
-                                        <span className="material-icons-round text-sm" style={{ color: a.color }}>{a.icon || "account_balance"}</span>
+                                <button
+                                    key={a.id}
+                                    type="button"
+                                    onClick={() => setForm({ ...form, accountId: a.id, creditCardId: "" })}
+                                    className={`shrink-0 flex flex-col items-start justify-between w-32 h-20 p-3 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden group ${form.accountId === a.id
+                                        ? "border-teal-500 bg-teal-500/5 shadow-[0_0_15px_rgba(20,184,166,0.2)]"
+                                        : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 hover:bg-white"
+                                        }`}
+                                >
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${form.accountId === a.id ? "bg-teal-500 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-400"}`}>
+                                        <span className="material-icons-round text-sm">{a.icon || "account_balance"}</span>
                                     </div>
-                                    <span className="text-slate-700 dark:text-slate-300 font-medium">{a.name}</span>
+                                    <div className="text-left w-full relative z-10">
+                                        <p className={`text-[11px] font-bold truncate ${form.accountId === a.id ? "text-teal-700 dark:text-teal-400" : "text-slate-700 dark:text-slate-300"}`}>{a.name}</p>
+                                        <p className="text-[10px] text-slate-400 font-medium truncate">{formatCurrency(toMajorUnits(amountCentsOf({ amount: a.balance, amountCents: a.balanceCents })))}</p>
+                                    </div>
+                                    {form.accountId === a.id && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-teal-500 animate-pulse" />}
                                 </button>
                             ))}
+
+                            {/* Cards */}
                             {cards.map(c => (
-                                <button key={c.id} type="button" onClick={() => setForm({ ...form, creditCardId: c.id, accountId: "" })}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left border transition-all text-xs ${form.creditCardId === c.id ? "border-[#2badee] bg-[#2badee]/5" : "border-slate-200 dark:border-slate-700"}`}>
-                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
-                                        <span className="material-icons-round text-sm" style={{ color: c.color }}>credit_card</span>
+                                <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => setForm({ ...form, creditCardId: c.id, accountId: "" })}
+                                    className={`shrink-0 flex flex-col items-start justify-between w-32 h-20 p-3 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden ${form.creditCardId === c.id
+                                        ? "border-violet-500 bg-violet-500/5 shadow-[0_0_15px_rgba(139,92,246,0.2)]"
+                                        : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 hover:bg-white"
+                                        }`}
+                                >
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${form.creditCardId === c.id ? "bg-violet-500 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-400"}`}>
+                                        <span className="material-icons-round text-sm">credit_card</span>
                                     </div>
-                                    <span className="text-slate-700 dark:text-slate-300 font-medium">{c.name} {c.lastFour ? `····${c.lastFour}` : ""}</span>
+                                    <div className="text-left w-full relative z-10">
+                                        <p className={`text-[11px] font-bold truncate ${form.creditCardId === c.id ? "text-violet-700 dark:text-violet-400" : "text-slate-700 dark:text-slate-300"}`}>{c.name}</p>
+                                        <p className="text-[10px] text-slate-400 font-medium truncate">···· {c.lastFour}</p>
+                                    </div>
+                                    {form.creditCardId === c.id && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-violet-500 animate-pulse" />}
                                 </button>
                             ))}
                         </div>
                     </div>
-                    <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={() => setModalOpen(false)} className="btn-secondary flex-1" disabled={isSaving}>Cancelar</button>
-                        <button type="submit" className="btn-primary flex-1" disabled={isSaving}>
-                            {isSaving ? "Guardando..." : "Agregar"}
+
+                    {/* Actions */}
+                    <div className="flex gap-4 pt-4">
+                        <button
+                            type="button"
+                            onClick={() => setModalOpen(false)}
+                            className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            disabled={isSaving}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            className={`flex-[2] py-3 px-4 rounded-xl text-sm font-bold text-white shadow-lg transition-all active:scale-[0.98] relative overflow-hidden group ${form.type === "expense" ? "shadow-red-500/20 hover:shadow-red-500/30 bg-gradient-to-br from-red-500 to-rose-600" : "shadow-emerald-500/20 hover:shadow-emerald-500/30 bg-gradient-to-br from-emerald-500 to-teal-600"}`}
+                            disabled={isSaving}
+                        >
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                            <span className="relative">{isSaving ? "Guardando..." : "Registrar Transacción"}</span>
                         </button>
                     </div>
                 </form>
