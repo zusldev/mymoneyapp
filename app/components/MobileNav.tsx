@@ -71,7 +71,7 @@ export function MobileNav() {
                                     <div key="fab" className="relative -top-6 mx-1">
                                         <Link
                                             href="/transacciones?new=true"
-                                            className="group relative flex items-center justify-center w-14 h-14 rounded-full bg-[#007AFF] shadow-[0_8px_20px_rgba(0,122,255,0.35)] transition-transform active:scale-90"
+                                            className="group relative flex items-center justify-center w-16 h-16 rounded-full bg-[#007AFF] shadow-[0_8px_20px_rgba(0,122,255,0.35)] transition-transform active:scale-95 cursor-pointer touch-manipulation"
                                             aria-label="Nueva transacción"
                                         >
                                             {/* FAB Liquid Glass Stack */}
@@ -90,7 +90,7 @@ export function MobileNav() {
                                             <div className="absolute inset-[1px] rounded-full bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
 
                                             {/* 4. Icon */}
-                                            <Plus size={28} strokeWidth={3} className="relative z-10 text-white drop-shadow-md" />
+                                            <Plus size={32} strokeWidth={3} className="relative z-10 text-white drop-shadow-md" />
                                         </Link>
                                     </div>
                                 );
@@ -100,22 +100,22 @@ export function MobileNav() {
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className="relative flex-1 h-full flex items-center justify-center group"
+                                    className="relative flex-1 h-full flex items-center justify-center group cursor-pointer touch-manipulation min-w-[44px]"
                                     aria-current={isActive ? "page" : undefined}
                                 >
                                     {/* Active background pill (Sliding) */}
                                     {isActive && (
                                         <motion.div
                                             layoutId="activeTabPill"
-                                            className="absolute w-12 h-12 bg-white/10 rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] backdrop-blur-md"
+                                            className="absolute w-12 h-12 bg-white/15 rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] backdrop-blur-md"
                                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                         />
                                     )}
 
                                     {/* Icon & Label */}
-                                    <div className="relative z-10 flex flex-col items-center justify-center gap-[2px]">
+                                    <div className="relative z-10 flex flex-col items-center justify-center gap-1">
                                         <motion.div
-                                            whileTap={{ scale: 0.8 }}
+                                            whileTap={{ scale: 0.9 }}
                                             transition={{ type: "spring", stiffness: 400, damping: 15 }}
                                         >
                                             <item.icon
@@ -123,10 +123,13 @@ export function MobileNav() {
                                                 strokeWidth={isActive ? 2.5 : 2}
                                                 className={`transition-all duration-300 ${isActive
                                                     ? "text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
-                                                    : "text-slate-400 group-hover:text-slate-200"
+                                                    : "text-slate-400 group-hover:text-amber-400/80"
                                                     }`}
                                             />
                                         </motion.div>
+                                        <span className={`text-[10px] font-bold transition-colors ${isActive ? "text-white" : "text-slate-500"}`}>
+                                            {item.label}
+                                        </span>
                                     </div>
                                 </Link>
                             );
