@@ -109,9 +109,9 @@ const TransactionItem = memo(function TransactionItem({ tx, anomalies: txAnomali
                     aria-label={`Eliminar transacción ${tx.merchant || cat.label}`}
                     disabled={deletingId === tx.id}
                     onClick={e => { e.stopPropagation(); onDelete(tx.id); }}
-                    className="touch-target focus-ring p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all mt-1 disabled:opacity-60"
+                    className="touch-target focus-ring p-3 rounded-full opacity-40 lg:opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-all mt-1 disabled:opacity-20 flex items-center justify-center min-h-[44px] min-w-[44px]"
                 >
-                    <span className="material-icons-round text-sm">delete_outline</span>
+                    <span className="material-icons-round text-lg">delete_outline</span>
                 </button>
             </div>
         </div>
@@ -688,6 +688,7 @@ export default function TransaccionesPage() {
                             <input
                                 className="w-full max-w-[240px] bg-transparent border-0 text-center text-5xl font-bold text-slate-900 dark:text-white placeholder:text-slate-300 focus:ring-0 p-0 tabular-nums"
                                 type="number"
+                                inputMode="decimal"
                                 step="0.01"
                                 value={form.amount}
                                 onChange={e => setForm({ ...form, amount: e.target.value })}
