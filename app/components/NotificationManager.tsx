@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { checkNotifications, AppNotification } from "../lib/notifications";
+import { checkNotifications } from "../lib/notifications";
 import { toastInfo, toastError } from "../lib/toast";
 import { apiGet } from "../lib/api";
 import { subscriptionArraySchema, transactionArraySchema } from "../lib/schemas";

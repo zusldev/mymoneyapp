@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Sparkles, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ArrowRight } from "lucide-react";
+import { X, Sparkles, TrendingUp, TrendingDown, CheckCircle, ArrowRight } from "lucide-react";
 import { formatCurrency, Recommendation, CashFlowResult, CategoryBreakdown } from "../lib/financialEngine";
 import { Cell, PieChart, Pie, ResponsiveContainer } from "recharts";
 
@@ -18,6 +18,8 @@ interface SmartReportModalProps {
 }
 
 export function SmartReportModal({ isOpen, onClose, data }: SmartReportModalProps) {
+    const barHeights = [45, 78, 52, 91, 63, 84, 58]; // Constant values to ensure purity
+
     if (!data) return null;
 
     return (
@@ -78,11 +80,11 @@ export function SmartReportModal({ isOpen, onClose, data }: SmartReportModalProp
                                         <div className="text-blue-100 font-medium mb-6">Puntaje Global</div>
 
                                         <div className="w-full flex justify-between items-end h-24 gap-2">
-                                            {[...Array(7)].map((_, i) => (
+                                            {barHeights.map((height, i) => (
                                                 <div key={i} className="flex-1 flex flex-col justify-end h-full group">
                                                     <div
                                                         className="w-full bg-white/20 rounded-t-sm group-hover:bg-white/40 transition-all duration-500"
-                                                        style={{ height: `${30 + Math.random() * 70}%` }}
+                                                        style={{ height: `${height}%` }}
                                                     />
                                                 </div>
                                             ))}

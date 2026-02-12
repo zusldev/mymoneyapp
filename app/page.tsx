@@ -109,7 +109,7 @@ export default function Dashboard() {
           })),
           recommendations: data.recommendations.map(r => ({
             ...r,
-            category: r.category as any
+            category: r.category as "pago" | "ahorro" | "gasto" | "suscripcion" | "presupuesto"
           }))
         } : null}
       />
@@ -259,7 +259,7 @@ export default function Dashboard() {
                   ))}
                 </Pie>
                 <RechartsTooltip
-                  formatter={(value: any) => formatCurrency(Number(value) || 0)}
+                  formatter={(value: string | number | undefined) => formatCurrency(Number(value) || 0)}
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                 />
               </PieChart>

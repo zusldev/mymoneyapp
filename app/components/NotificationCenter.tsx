@@ -1,7 +1,6 @@
 "use client";
 
 import { useNotifications } from "../context/NotificationContext";
-import Link from "next/link";
 import NextLink from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";

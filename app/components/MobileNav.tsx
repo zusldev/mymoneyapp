@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { LayoutDashboard, Wallet, Target, BrainCircuit, Plus } from "lucide-react";
 
 const MOBILE_NAV = [
@@ -122,8 +122,8 @@ export function MobileNav() {
                                                 size={24}
                                                 strokeWidth={isActive ? 2.5 : 2}
                                                 className={`transition-all duration-300 ${isActive
-                                                        ? "text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
-                                                        : "text-slate-400 group-hover:text-slate-200"
+                                                    ? "text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
+                                                    : "text-slate-400 group-hover:text-slate-200"
                                                     }`}
                                             />
                                         </motion.div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React from "react";
 
 export function BiometricGuard({ children }: { children: React.ReactNode }) {
     // Middleware now handles redirecting to /unlock if no session exists.

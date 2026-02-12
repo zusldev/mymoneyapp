@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { Lock, Fingerprint, Keyboard, ArrowRight } from "lucide-react";
@@ -13,6 +13,21 @@ export default function UnlockPage() {
     const [usePasscode, setUsePasscode] = useState(false);
     const router = useRouter();
 
+    const handleBiometric = useCallback(async () => {
+        setIsChecking(true);
+        setError("");
+        try {
+            const success = await verifyBiometric();
+            if (success) {
+                await login({ isBiometric: true });
+            }
+        } catch {
+            setError("Error con biometría");
+        } finally {
+            setIsChecking(false);
+        }
+    }, [router]);
+
     useEffect(() => {
         // Attempt biometric automatically if enabled
         const enabled = localStorage.getItem("faceIdEnabled") === "true";
@@ -21,22 +36,7 @@ export default function UnlockPage() {
         } else {
             setUsePasscode(true);
         }
-    }, []);
-
-    const handleBiometric = async () => {
-        setIsChecking(true);
-        setError("");
-        try {
-            const success = await verifyBiometric();
-            if (success) {
-                await login({ isBiometric: true });
-            }
-        } catch (err) {
-            setError("Error con biometría");
-        } finally {
-            setIsChecking(false);
-        }
-    };
+    }, [handleBiometric]);
 
     const handlePasscode = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -45,14 +45,14 @@ export default function UnlockPage() {
         setError("");
         try {
             await login({ passcode });
-        } catch (err: any) {
-            setError(err.message || "Código incorrecto");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Código incorrecto");
         } finally {
             setIsChecking(false);
         }
     };
 
-    const login = async (data: any) => {
+    const login = async (data: { passcode?: string; isBiometric?: boolean }) => {
         const res = await fetch("/api/auth/unlock", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -67,6 +67,8 @@ export default function UnlockPage() {
         // Success! Redirect to dashboard
         router.push("/");
     };
+
+    // router is stable, but adding to deps for handleBiometric purity
 
     return (
         <div className="fixed inset-0 z-[9999] bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-6">

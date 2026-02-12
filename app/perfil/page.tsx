@@ -11,6 +11,8 @@ import { toastSuccess, toastError, toastInfo } from "@/app/lib/toast";
 
 // ... imports
 import { registerBiometric, verifyBiometric, isBiometricSupported } from "@/app/lib/biometrics";
+import { Transaction } from "@/app/lib/types";
+import { LucideIcon } from "lucide-react";
 
 export default function ProfilePage() {
     const [darkMode, setDarkMode] = useState(false);
@@ -101,13 +103,13 @@ export default function ProfilePage() {
             const headers = ["Fecha", "Comercio", "Monto", "Tipo", "Categoría", "Cuenta"];
             const csvContent = [
                 headers.join(","),
-                ...data.map((tx: any) => [
+                ...data.map((tx: Transaction) => [
                     new Date(tx.date).toLocaleDateString(),
                     `"${tx.merchant}"`,
                     tx.amount,
                     tx.type,
                     tx.category,
-                    tx.accountName || tx.cardName || ""
+                    tx.account?.name || ""
                 ].join(","))
             ].join("\n");
 
@@ -303,7 +305,7 @@ function SettingItem({
     hasArrow,
     onClick
 }: {
-    icon: any,
+    icon: LucideIcon,
     color: string,
     label: string,
     value?: string | boolean,
