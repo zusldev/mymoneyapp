@@ -9,6 +9,7 @@ import { apiGet, apiPost, normalizeApiError } from "../lib/api";
 import { accountArraySchema, creditCardArraySchema, transactionArraySchema } from "../lib/schemas";
 import { toastError, toastSuccess } from "../lib/toast";
 import { parse, percentages, toMajorUnits } from "../lib/money";
+import { motion } from "motion/react";
 
 /* ═══ TransactionItem Component ═══ */
 const TransactionItem = memo(function TransactionItem({ tx, anomalies: txAnomalies, onDelete, onUpdateCategory, deletingId, syncingId }: {
@@ -191,6 +192,7 @@ export default function TransaccionesPage() {
     const [isDeleting, setIsDeleting] = useState<string | null>(null);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState<string | null>(null);
+    const [step, setStep] = useState(1);
     const [form, setForm] = useState({
         amount: "", type: "expense", date: new Date().toISOString().split("T")[0],
         merchant: "", description: "", category: "otros", accountId: "", creditCardId: "",
@@ -677,210 +679,243 @@ export default function TransaccionesPage() {
                 </div>
             </div>
 
-            {/* ═══════════ MODAL ═══════════ */}
-            <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Nueva Transacción">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Amount Input - Hero Style */}
-                    <div className="relative group flex justify-center py-4">
-                        <div className="absolute inset-0 bg-gradient-to-r from-teal-500/20 to-blue-500/20 blur-xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
-                        <div className="relative flex items-center">
-                            <span className="text-4xl font-light text-slate-400 mr-2">$</span>
-                            <input
-                                className="w-full max-w-[240px] bg-transparent border-0 text-center text-5xl font-bold text-slate-900 dark:text-white placeholder:text-slate-300 focus:ring-0 p-0 tabular-nums"
-                                type="number"
-                                inputMode="decimal"
-                                step="0.01"
-                                value={form.amount}
-                                onChange={e => setForm({ ...form, amount: e.target.value })}
-                                placeholder="0.00"
-                                autoFocus
-                                required
-                            />
-                        </div>
+            {/* ═══════════ MODAL: NUEVA TRANSACCIÓN (Refactored) ═══════════ */}
+            <Modal isOpen={modalOpen} onClose={() => { setModalOpen(false); setStep(1); }} title={step === 1 ? "Monto y Tipo" : step === 2 ? "Categoría" : step === 3 ? "Método de Pago" : "Detalles Finales"}>
+                <div className="space-y-6">
+                    {/* Progress Indicator */}
+                    <div className="flex gap-1.5 justify-center mb-2">
+                        {[1, 2, 3, 4].map(s => (
+                            <div key={s} className={`h-1.5 rounded-full transition-all duration-300 ${step === s ? "w-8 bg-nav-item-active" : step > s ? "w-4 bg-emerald-500/50" : "w-4 bg-slate-200 dark:bg-slate-700"}`} />
+                        ))}
                     </div>
 
-                    {/* Type Toggle - Glass Segmented Control */}
-                    <div className="flex p-1.5 bg-slate-100/50 dark:bg-slate-800/50 rounded-2xl backdrop-blur-sm relative">
-                        <div
-                            className={`absolute inset-y-1.5 w-[calc(50%-6px)] rounded-xl bg-white dark:bg-slate-700 shadow-sm transition-all duration-300 ease-out ${form.type === "income" ? "translate-x-[calc(100%+6px)]" : "translate-x-0"}`}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setForm({ ...form, type: "expense" })}
-                            className={`flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors ${form.type === "expense" ? "text-red-500" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}
-                        >
-                            Gasto
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setForm({ ...form, type: "income" })}
-                            className={`flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors ${form.type === "income" ? "text-emerald-500" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}
-                        >
-                            Ingreso
-                        </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Date & Merchant */}
-                        <div className="space-y-4">
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Fecha</label>
-                                <input
-                                    type="date"
-                                    className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm"
-                                    value={form.date}
-                                    onChange={e => setForm({ ...form, date: e.target.value })}
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Comercio</label>
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons-round text-slate-400 text-lg">storefront</span>
+                    {step === 1 && (
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+                            {/* Amount Input - Hero Style */}
+                            <div className="relative group flex flex-col items-center py-6">
+                                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-32 bg-primary/5 blur-[60px] rounded-full pointer-events-none" />
+                                <div className="relative flex items-baseline">
+                                    <span className="text-3xl font-bold text-slate-400 mr-2">$</span>
                                     <input
-                                        className="w-full pl-11 pr-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm"
-                                        value={form.merchant}
-                                        onChange={e => setForm({ ...form, merchant: e.target.value })}
-                                        placeholder="OXXO, Amazon..."
+                                        className="w-full max-w-[280px] bg-transparent border-0 text-center text-6xl font-black text-slate-900 dark:text-white placeholder:text-slate-200 focus:ring-0 p-0 tabular-nums animate-pulse-soft"
+                                        type="number"
+                                        inputMode="decimal"
+                                        step="0.01"
+                                        value={form.amount}
+                                        onChange={e => setForm({ ...form, amount: e.target.value })}
+                                        placeholder="0.00"
+                                        autoFocus
                                     />
                                 </div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-4">Ingresa el monto</p>
                             </div>
-                        </div>
 
-                        {/* Category Selector */}
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Categoría</label>
-                            <div className="relative group">
-                                <select
-                                    className="w-full appearance-none pl-4 pr-10 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm cursor-pointer"
-                                    value={form.category}
-                                    onChange={e => setForm({ ...form, category: e.target.value })}
-                                >
-                                    {CATEGORY_KEYS.map(k => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
-                                </select>
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none material-icons-round">expand_more</span>
-                                {/* Visual indicator of selected category */}
-                                <div className="absolute right-10 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center pointer-events-none"
-                                    style={{ background: CATEGORIES[form.category as CategoryKey]?.color || CATEGORIES.otros.color }}>
-                                    <span className="material-icons-round text-[10px] text-white">
-                                        {CATEGORIES[form.category as CategoryKey]?.icon || CATEGORIES.otros.icon}
-                                    </span>
+                            {/* Type Toggle - Accessible Segmented Control */}
+                            <div className="space-y-3">
+                                <label className="text-xs font-black text-slate-500 uppercase tracking-wider ml-1">Tipo de Transacción</label>
+                                <div role="tablist" className="flex p-1.5 bg-slate-100 dark:bg-slate-800/50 rounded-[1.25rem] relative">
+                                    <motion.div
+                                        className={`absolute inset-y-1.5 w-[calc(50%-6px)] rounded-xl shadow-lg shadow-black/5 bg-white dark:bg-slate-700`}
+                                        animate={{ x: form.type === "income" ? "100%" : "0%" }}
+                                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                    />
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={form.type === "expense"}
+                                        onClick={() => setForm({ ...form, type: "expense" })}
+                                        className={`flex-1 relative z-10 py-3 text-sm font-bold transition-colors ${form.type === "expense" ? "text-red-500" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}
+                                    >
+                                        Gasto
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={form.type === "income"}
+                                        onClick={() => setForm({ ...form, type: "income" })}
+                                        className={`flex-1 relative z-10 py-3 text-sm font-bold transition-colors ${form.type === "income" ? "text-emerald-500" : "text-slate-500 dark:text-slate-400 hover:text-slate-700"}`}
+                                    >
+                                        Ingreso
+                                    </button>
                                 </div>
                             </div>
-                            {/* Quick bubbles for common categories */}
-                            <div className="flex gap-2 overflow-x-auto py-1 hide-scrollbar">
-                                {["comida", "transporte", "supermercado", "hogar"].map(k => (
+                        </motion.div>
+                    )}
+
+                    {step === 2 && (
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+                            <label className="text-xs font-black text-slate-500 uppercase tracking-wider ml-1">Selecciona una Categoría</label>
+                            <div className="grid grid-cols-3 gap-3">
+                                {CATEGORY_KEYS.map(k => {
+                                    const active = form.category === k;
+                                    const info = CATEGORIES[k];
+                                    return (
+                                        <button
+                                            key={k}
+                                            type="button"
+                                            onClick={() => { setForm({ ...form, category: k }); setStep(3); }}
+                                            className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all active:scale-95 ${active
+                                                ? "bg-primary/10 border-primary text-primary"
+                                                : "bg-white/50 dark:bg-slate-800/50 border-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"}`}
+                                        >
+                                            <span className="material-icons-round text-2xl mb-2" style={{ color: active ? undefined : info.color }}>{info.icon}</span>
+                                            <span className="text-[10px] font-bold truncate w-full text-center">{info.label}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {step === 3 && (
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+                            <label className="text-xs font-black text-slate-500 uppercase tracking-wider ml-1">¿Cómo pagaste?</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setForm({ ...form, accountId: "", creditCardId: "" }); setStep(4); }}
+                                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${!form.accountId && !form.creditCardId
+                                        ? "bg-primary/10 border-primary"
+                                        : "bg-white/50 dark:bg-slate-800/50 border-transparent hover:bg-slate-100"}`}
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400">
+                                        <span className="material-icons-round text-xl">money_off</span>
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Ninguno</span>
+                                </button>
+                                {accounts.map(a => (
                                     <button
-                                        key={k}
+                                        key={a.id}
                                         type="button"
-                                        onClick={() => setForm({ ...form, category: k })}
-                                        className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all flex items-center gap-1.5 ${form.category === k
-                                            ? "bg-slate-800 text-white dark:bg-white dark:text-slate-900 border-transparent"
-                                            : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
-                                            }`}
+                                        onClick={() => { setForm({ ...form, accountId: a.id, creditCardId: "" }); setStep(4); }}
+                                        className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${form.accountId === a.id
+                                            ? "bg-teal-500/10 border-teal-500"
+                                            : "bg-white/50 dark:bg-slate-800/50 border-transparent hover:bg-slate-100"}`}
                                     >
-                                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: CATEGORIES[k as CategoryKey]?.color }} />
-                                        {CATEGORIES[k as CategoryKey]?.label}
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${form.accountId === a.id ? "bg-teal-500 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-400"}`}>
+                                            <span className="material-icons-round text-xl">{a.icon || "account_balance"}</span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-black text-slate-900 dark:text-white truncate">{a.name}</p>
+                                            <p className="text-[10px] font-bold text-slate-400 truncate">{formatCurrency(toMajorUnits(a.balanceCents || 0))}</p>
+                                        </div>
+                                    </button>
+                                ))}
+                                {cards.map(c => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => { setForm({ ...form, creditCardId: c.id, accountId: "" }); setStep(4); }}
+                                        className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${form.creditCardId === c.id
+                                            ? "bg-violet-500/10 border-violet-500"
+                                            : "bg-white/50 dark:bg-slate-800/50 border-transparent hover:bg-slate-100"}`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${form.creditCardId === c.id ? "bg-violet-500 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-400"}`}>
+                                            <span className="material-icons-round text-xl">credit_card</span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-black text-slate-900 dark:text-white truncate">{c.name}</p>
+                                            <p className="text-[10px] font-bold text-slate-400 truncate">···· {c.lastFour}</p>
+                                        </div>
                                     </button>
                                 ))}
                             </div>
-                        </div>
-                    </div>
+                        </motion.div>
+                    )}
 
-                    {/* Description - Optional */}
-                    <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Nota (opcional)</label>
-                        <input
-                            className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border-0 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500/50 transition-all font-medium backdrop-blur-sm"
-                            value={form.description}
-                            onChange={e => setForm({ ...form, description: e.target.value })}
-                            placeholder="Detalles adicionales..."
-                        />
-                    </div>
+                    {step === 4 && (
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
+                            <div className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider ml-1">Comercio / Beneficiario</label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons-round text-slate-400">storefront</span>
+                                        <input
+                                            className="w-full pl-11 pr-4 py-3.5 bg-slate-100 dark:bg-slate-800/50 border-0 rounded-2xl text-sm font-bold placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/50 transition-all"
+                                            value={form.merchant}
+                                            onChange={e => setForm({ ...form, merchant: e.target.value })}
+                                            placeholder="Amazon, OXXO, Renta..."
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider ml-1">Fecha</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-4 py-3.5 bg-slate-100 dark:bg-slate-800/50 border-0 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary/50"
+                                            value={form.date}
+                                            onChange={e => setForm({ ...form, date: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5 flex flex-col justify-end">
+                                        <div className="flex items-center gap-2 p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl">
+                                            <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white" style={{ background: CATEGORIES[form.category as CategoryKey]?.color }}>
+                                                <span className="material-icons-round text-[14px]">{CATEGORIES[form.category as CategoryKey]?.icon}</span>
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 truncate">{CATEGORIES[form.category as CategoryKey]?.label}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-black text-slate-500 uppercase tracking-wider ml-1">Nota Adicional</label>
+                                    <textarea
+                                        className="w-full px-4 py-3.5 bg-slate-100 dark:bg-slate-800/50 border-0 rounded-2xl text-sm font-bold placeholder:text-slate-300 focus:ring-2 focus:ring-primary/50 min-h-[80px]"
+                                        value={form.description}
+                                        onChange={e => setForm({ ...form, description: e.target.value })}
+                                        placeholder="Escribe algo opcional..."
+                                    />
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
 
-                    {/* Payment Method - Horizontal Scroll Cards */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1">Método de pago</label>
-                        <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar -mx-1 px-1">
-                            {/* None option */}
+                    {/* Footer Actions */}
+                    <div className="flex gap-3 pt-6 sticky bottom-0 bg-white dark:bg-[#1a262d] py-4 -mx-6 px-6 border-t border-slate-100 dark:border-slate-800 mt-auto">
+                        {step > 1 ? (
                             <button
                                 type="button"
-                                onClick={() => setForm({ ...form, accountId: "", creditCardId: "" })}
-                                className={`shrink-0 flex flex-col items-center justify-center w-24 h-20 rounded-2xl border-2 transition-all duration-300 gap-1 ${!form.accountId && !form.creditCardId
-                                    ? "bg-slate-800 dark:bg-white border-transparent shadow-lg text-white dark:text-slate-900 scale-105"
-                                    : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 text-slate-400 hover:bg-slate-50"
-                                    }`}
+                                onClick={() => setStep(step - 1)}
+                                className="h-14 px-6 rounded-2xl text-sm font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 transition-all flex items-center justify-center"
                             >
-                                <span className="material-icons-round text-2xl">money_off</span>
-                                <span className="text-[10px] font-bold">Ninguno</span>
+                                <span className="material-icons-round mr-1">arrow_back</span>
+                                Atrás
                             </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setModalOpen(false)}
+                                className="h-14 px-6 rounded-2xl text-sm font-bold text-slate-500 hover:bg-slate-100 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                        )}
 
-                            {/* Accounts */}
-                            {accounts.map(a => (
-                                <button
-                                    key={a.id}
-                                    type="button"
-                                    onClick={() => setForm({ ...form, accountId: a.id, creditCardId: "" })}
-                                    className={`shrink-0 flex flex-col items-start justify-between w-32 h-20 p-3 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden group ${form.accountId === a.id
-                                        ? "border-teal-500 bg-teal-500/5 shadow-[0_0_15px_rgba(20,184,166,0.2)]"
-                                        : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 hover:bg-white"
-                                        }`}
-                                >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${form.accountId === a.id ? "bg-teal-500 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-400"}`}>
-                                        <span className="material-icons-round text-sm">{a.icon || "account_balance"}</span>
-                                    </div>
-                                    <div className="text-left w-full relative z-10">
-                                        <p className={`text-[11px] font-bold truncate ${form.accountId === a.id ? "text-teal-700 dark:text-teal-400" : "text-slate-700 dark:text-slate-300"}`}>{a.name}</p>
-                                        <p className="text-[10px] text-slate-400 font-medium truncate">{formatCurrency(toMajorUnits(amountCentsOf({ amount: a.balance, amountCents: a.balanceCents })))}</p>
-                                    </div>
-                                    {form.accountId === a.id && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-teal-500 animate-pulse" />}
-                                </button>
-                            ))}
-
-                            {/* Cards */}
-                            {cards.map(c => (
-                                <button
-                                    key={c.id}
-                                    type="button"
-                                    onClick={() => setForm({ ...form, creditCardId: c.id, accountId: "" })}
-                                    className={`shrink-0 flex flex-col items-start justify-between w-32 h-20 p-3 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden ${form.creditCardId === c.id
-                                        ? "border-violet-500 bg-violet-500/5 shadow-[0_0_15px_rgba(139,92,246,0.2)]"
-                                        : "bg-white/50 dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50 hover:bg-white"
-                                        }`}
-                                >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${form.creditCardId === c.id ? "bg-violet-500 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-400"}`}>
-                                        <span className="material-icons-round text-sm">credit_card</span>
-                                    </div>
-                                    <div className="text-left w-full relative z-10">
-                                        <p className={`text-[11px] font-bold truncate ${form.creditCardId === c.id ? "text-violet-700 dark:text-violet-400" : "text-slate-700 dark:text-slate-300"}`}>{c.name}</p>
-                                        <p className="text-[10px] text-slate-400 font-medium truncate">···· {c.lastFour}</p>
-                                    </div>
-                                    {form.creditCardId === c.id && <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-violet-500 animate-pulse" />}
-                                </button>
-                            ))}
-                        </div>
+                        {step < 4 ? (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (step === 1 && !form.amount) return toastError("Ingresa un monto");
+                                    setStep(step + 1);
+                                }}
+                                className="flex-1 h-14 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-black shadow-xl shadow-black/10 transition-all active:scale-95 flex items-center justify-center"
+                            >
+                                Siguiente
+                                <span className="material-icons-round ml-1">arrow_forward</span>
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleSubmit}
+                                disabled={isSaving}
+                                className={`flex-1 h-14 rounded-2xl text-white text-sm font-black shadow-lg transition-all active:scale-95 flex items-center justify-center ${form.type === "expense" ? "bg-red-500 shadow-red-500/20" : "bg-emerald-500 shadow-emerald-500/20"}`}
+                            >
+                                {isSaving ? "Guardando..." : "Registrar"}
+                                {!isSaving && <span className="material-icons-round ml-1">check</span>}
+                            </button>
+                        )}
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-4 pt-4">
-                        <button
-                            type="button"
-                            onClick={() => setModalOpen(false)}
-                            className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            disabled={isSaving}
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            className={`flex-[2] py-3 px-4 rounded-xl text-sm font-bold text-white shadow-lg transition-all active:scale-[0.98] relative overflow-hidden group ${form.type === "expense" ? "shadow-red-500/20 hover:shadow-red-500/30 bg-gradient-to-br from-red-500 to-rose-600" : "shadow-emerald-500/20 hover:shadow-emerald-500/30 bg-gradient-to-br from-emerald-500 to-teal-600"}`}
-                            disabled={isSaving}
-                        >
-                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                            <span className="relative">{isSaving ? "Guardando..." : "Registrar Transacción"}</span>
-                        </button>
-                    </div>
-                </form>
+                </div>
             </Modal>
             <ConfirmDialog
                 open={pendingDeleteId !== null}

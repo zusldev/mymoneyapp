@@ -7,6 +7,18 @@
    MyMoneyApp — Premium Fintech Design System
    ═══════════════════════════════════════════ */
 
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --color-primary: #2badee;
+  --color-background: var(--bg-default);
+  --color-border: var(--border-default);
+}
+
+.app-blurred {
+  filter: blur(15px);
+  transition: filter 0.3s ease;
+}
+
 @theme inline {
   --color-primary: #2badee;
   --color-primary-dark: #1a8cb5;
@@ -29,28 +41,45 @@
   --glass-border-light: rgba(255, 255, 255, 0.42);
   --glass-border-dark: rgba(255, 255, 255, 0.08);
 
+  /* ════ iOS 26 Style Tokens ════ */
+  --nav-height: 72px;
+  --nav-capsule-bg: var(--glass-bg-mobile-light);
+  --nav-item-active: var(--color-primary);
+  --nav-text-muted: var(--color-text-muted);
+
   /* Semantic Tokens */
   --text-primary: var(--color-text-primary);
   --text-secondary: var(--color-text-secondary);
   --text-muted: var(--color-text-muted);
   --icon-default: var(--color-icon-default);
   --border-default: var(--color-border-default);
+  --surface-default: var(--color-surface-light);
 }
 
 :root {
-  --color-text-primary: #1e293b;
-  --color-text-secondary: #475569;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
   --color-text-muted: #64748b;
   --color-icon-default: #64748b;
   --color-border-default: #e2e8f0;
+  --color-surface-light: #ffffff;
+
+  --nav-capsule-bg: rgba(255, 255, 255, 0.85);
+  --nav-item-active: #007AFF;
+  --nav-text-muted: #8E8e93;
 }
 
 .dark {
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #cbd5e1;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #e2e8f0;
   --color-text-muted: #94a3b8;
   --color-icon-default: #94a3b8;
-  --color-border-default: #334155;
+  --color-border-default: #1e293b;
+  --color-surface-light: #1a262d;
+
+  --nav-capsule-bg: rgba(15, 31, 37, 0.9);
+  --nav-item-active: #0A84FF;
+  --nav-text-muted: #98989D;
 }
 
 /* ═══ Global Resets ═══ */

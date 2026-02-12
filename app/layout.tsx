@@ -59,6 +59,14 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased font-sans">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('blur', () => document.body.classList.add('app-blurred'));
+              window.addEventListener('focus', () => document.body.classList.remove('app-blurred'));
+            `,
+          }}
+        />
         <ThemeProvider>
           <BiometricGuard>
             <NotificationProvider>
@@ -67,16 +75,17 @@ export default function RootLayout({
                 <Sidebar />
 
                 {/* Main Content */}
-                <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
+                <main className="flex-1 overflow-y-auto overflow-x-hidden relative bg-background">
                   {/* Background Decoration */}
-                  <div className="absolute top-0 left-0 w-full h-80 bg-gradient-to-b from-[#2badee]/[0.04] to-transparent -z-10 pointer-events-none" />
-                  <div className="absolute top-0 right-0 w-96 h-96 bg-[#2badee]/[0.03] rounded-full blur-3xl -z-10 pointer-events-none translate-x-1/3 -translate-y-1/3" />
+                  <div className="absolute top-0 left-0 w-full h-[60vh] bg-gradient-to-b from-primary/5 to-transparent -z-10 pointer-events-none" />
+                  <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] -z-10 pointer-events-none translate-x-1/3 -translate-y-1/3" />
+                  <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-purple-500/5 rounded-full blur-[100px] -z-10 pointer-events-none -translate-x-1/2 translate-y-1/2" />
 
                   {/* Header */}
-                  <header className="h-16 px-4 sm:px-8 flex items-center justify-end sticky top-0 z-10 glass-header">
+                  <header className="h-16 px-4 sm:px-8 flex items-center justify-end sticky top-0 z-10 glass-header border-b border-border">
                     <div className="flex items-center gap-3">
                       <NotificationCenter />
-                      <Link href="/perfil" className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2badee] to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-[#2badee]/20 transition-transform active:scale-95">
+                      <Link href="/perfil" className="h-10 w-10 rounded-2xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-primary/20 transition-all active:scale-95 hover:scale-105">
                         L
                       </Link>
                     </div>
