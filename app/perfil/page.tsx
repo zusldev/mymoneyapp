@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
     User, Moon, Globe, Shield, ChevronRight, Bell, Download,
     Trash2, Smartphone
 } from "lucide-react";
-import { toastSuccess, toastError, toastInfo } from "@/app/lib/toast";
+import { toastSuccess, toastError } from "@/app/lib/toast";
 
 // ... imports
 import { registerBiometric, verifyBiometric, isBiometricSupported } from "@/app/lib/biometrics";
@@ -15,6 +16,7 @@ import { LucideIcon } from "lucide-react";
 import { useTheme } from "../context/ThemeProvider";
 
 export default function ProfilePage() {
+    const router = useRouter();
     const { theme, toggleTheme } = useTheme();
     const [notifications, setNotifications] = useState(false);
     const [faceId, setFaceId] = useState(false);
@@ -222,8 +224,8 @@ export default function ProfilePage() {
 
                         <SettingItem
                             icon={Smartphone}
-                            color="bg-green-500"
-                            label="Face ID"
+                            color="bg-emerald-500"
+                            label="Face ID / Biometría"
                             isToggle
                             value={faceId}
                             onChange={toggleFaceId}
@@ -231,12 +233,11 @@ export default function ProfilePage() {
 
                         <SettingItem
                             icon={Shield}
-                            color="bg-slate-500"
-                            label="Cambiar PIN"
+                            color="bg-primary"
+                            label="Configurar PIN / Bloqueo"
                             hasArrow
-                            onClick={() => toastInfo("Funcionalidad próximamente")}
+                            onClick={() => router.push("/unlock/setup")}
                         />
-
                     </div>
                 </section>
 

@@ -14,18 +14,19 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>("light");
-    const [mounted, setMounted] = useState(false);
 
+    // Initialize theme from localStorage on mount
     useEffect(() => {
-        // Read from localStorage on mount
         const savedTheme = localStorage.getItem("theme") as Theme | null;
-        const isDark = savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-        const initialTheme = isDark ? "dark" : "light";
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setThemeState(initialTheme);
-        document.documentElement.classList.toggle("dark", isDark);
-        setMounted(true);
+        if (savedTheme) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setThemeState(savedTheme);
+            document.documentElement.classList.toggle("dark", savedTheme === "dark");
+        } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setThemeState("dark");
+            document.documentElement.classList.add("dark");
+        }
     }, []);
 
     const setTheme = (newTheme: Theme) => {
@@ -39,14 +40,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setTheme(newTheme);
     };
 
-    // Prevent hydration mismatch by only rendering children after mount if needed,
-    // but for theme we usually want to render immediately to avoid flash.
-    // The inline script in layout.tsx will handle the initial class application.
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
-            <div style={{ visibility: mounted ? "visible" : "hidden" }}>
-                {children}
-            </div>
+            {/* We render immediately to avoid flash, relying on the inline script in layout.tsx */}
+            {children}
         </ThemeContext.Provider>
     );
 }

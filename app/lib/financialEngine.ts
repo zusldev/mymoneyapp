@@ -16,6 +16,7 @@ export interface CashFlowResult {
   totalIncome: number;
   totalExpenses: number;
   netBalance: number;
+  netCashFlow: number; // Added for liquidity insight
   savingsRate: number;
   isDeficit: boolean;
 }
@@ -107,6 +108,7 @@ export function calculateCashFlow(
     totalIncome: toMajorUnits(totalIncomeCents),
     totalExpenses: toMajorUnits(totalExpensesCents),
     netBalance: toMajorUnits(netBalanceCents),
+    netCashFlow: toMajorUnits(netBalanceCents),
     savingsRate,
     isDeficit: netBalanceCents < 0,
   };
@@ -242,12 +244,12 @@ export function projectEndOfMonth(
   const liquidityDays =
     projection.dailyBurnCents > 0
       ? Math.min(
-          new Decimal(currentBalanceCents)
-            .div(projection.dailyBurnCents)
-            .floor()
-            .toNumber(),
-          999,
-        )
+        new Decimal(currentBalanceCents)
+          .div(projection.dailyBurnCents)
+          .floor()
+          .toNumber(),
+        999,
+      )
       : 999;
 
   return {

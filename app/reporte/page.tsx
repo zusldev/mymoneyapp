@@ -89,39 +89,53 @@ export default function ReportPage() {
                 </div>
             </motion.div>
 
-            {/* Cash Flow Summary */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20">
-                    <div className="flex items-center gap-2 text-emerald-600 text-[10px] font-black uppercase mb-3">
-                        <TrendingUp size={14} /> Ingresos
+            {/* Cash Flow Summary & Liquidity Insight */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20">
+                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase mb-3">
+                            <TrendingUp size={14} /> Ingresos
+                        </div>
+                        <div className="text-2xl font-black text-slate-900 dark:text-white">
+                            {formatCurrency(data.cashFlow.totalIncome)}
+                        </div>
                     </div>
-                    <div className="text-2xl font-black text-slate-900 dark:text-white">
-                        {formatCurrency(data.cashFlow.totalIncome)}
+                    <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/50">
+                        <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase mb-3">
+                            <TrendingDown size={14} /> Gastos
+                        </div>
+                        <div className="text-2xl font-black text-slate-900 dark:text-white">
+                            {formatCurrency(data.cashFlow.totalExpenses)}
+                        </div>
                     </div>
                 </div>
-                <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/50">
-                    <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase mb-3">
-                        <TrendingDown size={14} /> Gastos
+
+                <div className="p-6 rounded-3xl bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20 flex flex-col justify-center">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 uppercase tracking-tighter">Liquidez Disponible</h4>
+                        <div className="px-2 py-0.5 rounded-full bg-blue-500 text-[10px] font-black text-white">ESTADÍSTICA</div>
                     </div>
-                    <div className="text-2xl font-black text-slate-900 dark:text-white">
-                        {formatCurrency(data.cashFlow.totalExpenses)}
+                    <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+                        {formatCurrency(data.cashFlow.netCashFlow)}
                     </div>
+                    <p className="text-xs text-blue-700/60 dark:text-blue-300/60 font-medium">Balance neto del periodo actual</p>
                 </div>
             </div>
 
             {/* Top Categories */}
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-blue-500/10 transition-colors" />
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">Mix de Gastos</h3>
                 <div className="flex flex-col md:flex-row items-center gap-10">
-                    <div className="w-40 h-40 shrink-0">
+                    <div className="w-48 h-48 shrink-0">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={data.categoryBreakdown}
                                     dataKey="totalCents"
-                                    innerRadius={50}
-                                    outerRadius={70}
-                                    paddingAngle={8}
+                                    innerRadius={60}
+                                    outerRadius={85}
+                                    paddingAngle={6}
                                     stroke="none"
                                 >
                                     {data.categoryBreakdown.map((entry, index) => (
@@ -131,14 +145,17 @@ export default function ReportPage() {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="flex-1 space-y-4">
-                        {data.categoryBreakdown.slice(0, 3).map((cat, i) => (
-                            <div key={i} className="flex justify-between items-center">
+                    <div className="flex-1 space-y-4 w-full">
+                        {data.categoryBreakdown.slice(0, 4).map((cat, i) => (
+                            <div key={i} className="flex justify-between items-center group/item hover:translate-x-1 transition-transform">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+                                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: cat.color }} />
                                     <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{cat.label}</span>
                                 </div>
-                                <span className="text-xs font-medium text-slate-500">{cat.percentage.toFixed(0)}%</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-slate-900 dark:text-white">{cat.percentage.toFixed(0)}%</span>
+                                    <span className="text-[10px] font-medium text-slate-400">{formatCurrency(cat.totalCents)}</span>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -147,16 +164,22 @@ export default function ReportPage() {
 
             {/* Recommendations */}
             <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <CheckCircle size={20} className="text-blue-500" />
-                    Recomendaciones
-                </h3>
-                <div className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <CheckCircle size={20} className="text-blue-500" />
+                        Recomendaciones
+                    </h3>
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">IA INSIGHTS</span>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
                     {data.recommendations.map((rec, i) => (
-                        <div key={i} className="p-6 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm">
-                            <h4 className="font-bold text-slate-900 dark:text-white mb-2">{rec.title}</h4>
+                        <div key={i} className="p-6 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                            <h4 className="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${rec.impact === 'alto' ? 'bg-rose-500' : 'bg-blue-500'}`} />
+                                {rec.title}
+                            </h4>
                             <p className="text-sm text-slate-500 leading-relaxed mb-4">{rec.description}</p>
-                            <div className="inline-flex px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest">
+                            <div className="inline-flex px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700">
                                 Impacto: {rec.impact}
                             </div>
                         </div>
