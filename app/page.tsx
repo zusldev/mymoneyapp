@@ -2,21 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { useRouter } from "next/navigation";
 import Link from 'next/link';
 import {
-  ArrowUpRight,
-  TrendingUp,
-  Zap,
-  Calendar,
   Wallet,
   BrainCircuit,
-  ArrowRight,
-  ShieldCheck,
-  CreditCard,
-  Target,
-  Activity,
-  ChevronRight,
-  Sparkles as SparklesIcon,
   Plus,
   MoreHorizontal
 } from 'lucide-react';
@@ -28,23 +18,20 @@ import {
   Tooltip as RechartsTooltip
 } from 'recharts';
 
-import { apiGet, normalizeApiError } from "./lib/api";
-import { toastError } from "./lib/toast";
+import { apiGet } from "./lib/api";
 import type { AnalysisData, Subscription } from "./lib/types";
-import { parse } from "./lib/money";
-import { formatCurrency } from "./lib/financialEngine";
+import { formatCurrency } from "./lib/financialEngine"; // Removed formatCents as it's not used
 import { CATEGORIES, CategoryKey } from "./lib/categories";
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
-
 // ... imports
-import { SmartReportModal } from "./components/SmartReportModal";
+// Removed import { SmartReportModal } from "./components/SmartReportModal";
 
 export default function Dashboard() {
   const [data, setData] = useState<AnalysisData | null>(null);
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showReport, setShowReport] = useState(false);
+  // Removed const [showReport, setShowReport] = useState(false);
+  const router = useRouter(); // Initialized useRouter
 
   useEffect(() => {
     Promise.all([
@@ -89,30 +76,15 @@ export default function Dashboard() {
     .sort((a, b) => new Date(a.nextDate).getTime() - new Date(b.nextDate).getTime())
     .slice(0, 5);
 
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="h-10 w-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+    </div>
+  );
+
   return (
     <div className="space-y-6 pb-24">
-      <SmartReportModal
-        isOpen={showReport}
-        onClose={() => setShowReport(false)}
-        data={data ? {
-          healthScore,
-          cashFlow: {
-            ...data.cashFlow,
-            totalIncomeCents: data.cashFlow.totalIncomeCents ?? 0,
-            totalExpensesCents: data.cashFlow.totalExpensesCents ?? 0,
-            netBalanceCents: data.cashFlow.netBalanceCents ?? 0,
-          },
-          categoryBreakdown: data.categoryBreakdown.map(c => ({
-            ...c,
-            category: c.category as CategoryKey,
-            totalCents: c.totalCents ?? 0
-          })),
-          recommendations: data.recommendations.map(r => ({
-            ...r,
-            category: r.category as "pago" | "ahorro" | "gasto" | "suscripcion" | "presupuesto"
-          }))
-        } : null}
-      />
+      {/* Removed SmartReportModal component */}
 
       {/* ═ ROW 1: Health Score & Main Stats ═ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -132,7 +104,7 @@ export default function Dashboard() {
               </p>
               <div className="flex flex-wrap gap-3 mt-6 justify-center md:justify-start">
                 <button
-                  onClick={() => setShowReport(true)}
+                  onClick={() => router.push("/reporte")} // Changed to navigate to /reporte
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                 >
                   Ver Reporte

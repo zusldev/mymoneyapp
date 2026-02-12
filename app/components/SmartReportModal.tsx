@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Sparkles, TrendingUp, TrendingDown, CheckCircle, ArrowRight } from "lucide-react";
 import { formatCurrency, Recommendation, CashFlowResult, CategoryBreakdown } from "../lib/financialEngine";

@@ -85,8 +85,8 @@ export default function CalendarioPage() {
                     amount: toMajorUnits(amountCentsOf(sub)),
                 }))
             );
-        } catch (e) {
-            const failure = normalizeApiError(e);
+        } catch (error) {
+            const failure = normalizeApiError(error);
             toastError(failure.error);
         } finally {
             setLoading(false);
@@ -476,11 +476,10 @@ export default function CalendarioPage() {
                                 }
 
                                 return tips.map((tip, i) => (
-                                    <div key={i} className={`p-3 rounded-lg border text-sm ${
-                                        tip.type === "alert"
+                                    <div key={i} className={`p-3 rounded-lg border text-sm ${tip.type === "alert"
                                             ? "bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30"
                                             : "bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700"
-                                    }`}>
+                                        }`}>
                                         <p className={tip.type === "alert" ? "text-slate-700 dark:text-slate-300 leading-relaxed" : "text-slate-600 dark:text-slate-400"}>
                                             {tip.type === "alert" && <span className="font-semibold text-[#2badee]">Alerta: </span>}
                                             {tip.text}
