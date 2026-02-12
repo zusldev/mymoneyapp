@@ -22,6 +22,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         const isDark = savedTheme === "dark" || (!savedTheme && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
         const initialTheme = isDark ? "dark" : "light";
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setThemeState(initialTheme);
         document.documentElement.classList.toggle("dark", isDark);
         setMounted(true);
@@ -43,7 +44,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // The inline script in layout.tsx will handle the initial class application.
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
-            {children}
+            <div style={{ visibility: mounted ? "visible" : "hidden" }}>
+                {children}
+            </div>
         </ThemeContext.Provider>
     );
 }

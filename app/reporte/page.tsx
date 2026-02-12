@@ -24,9 +24,9 @@ export default function ReportPage() {
         async function fetchReport() {
             try {
                 const res = await apiGet<ReportData>("/api/analysis");
-                setData(res as any);
-            } catch (e) {
-                console.error("Error fetching report:", e);
+                setData(res);
+            } catch (error) {
+                console.error("Error fetching report:", error);
             } finally {
                 setLoading(false);
             }

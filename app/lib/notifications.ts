@@ -1,5 +1,5 @@
 import { Subscription, TransactionAnomaly } from "./types";
-import { nextOccurrence } from "./dates";
+import { Recommendation } from "./financialEngine";
 
 export type NotificationType = "bill_due" | "anomaly" | "budget_alert" | "insight";
 export type NotificationSeverity = "info" | "warning" | "danger";
@@ -15,8 +15,6 @@ export interface AppNotification {
     read: boolean;
 }
 
-import { Recommendation } from "./financialEngine";
-
 export function checkNotifications(data: {
     subscriptions: Subscription[];
     anomalies: TransactionAnomaly[];
@@ -27,13 +25,9 @@ export function checkNotifications(data: {
     const today = now.toISOString().split("T")[0];
 
     // 1. Check Subscriptions (Bill Reminders)
-    // Look for bills due in the next 3 days
     data.subscriptions.forEach((sub) => {
         if (!sub.active) return;
 
-        // We assume sub.nextDate is valid, but let's recalculate next occurrence just in case
-        // or rely on the engine's nextDate if it's up to date. 
-        // For safety, let's compare the stored nextDate.
         const dueDate = new Date(sub.nextDate);
         const diffTime = dueDate.getTime() - now.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -46,14 +40,13 @@ export function checkNotifications(data: {
                 title: "Pago Próximo",
                 message: `${sub.name} vence ${diffDays === 0 ? "hoy" : diffDays === 1 ? "mañana" : `en ${diffDays} días`}`,
                 date: today,
-                actionUrl: `/suscripciones`,
+                actionUrl: "/suscripciones",
                 read: false,
             });
         }
     });
 
     // 2. Check Anomalies
-    // We assume anomalies are fresh from the engine
     data.anomalies.forEach((anomaly) => {
         notifications.push({
             id: `anomaly-${anomaly.txId}-${today}`,

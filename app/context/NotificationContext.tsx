@@ -4,9 +4,9 @@ import React, { createContext, useContext, useEffect, useState, useRef } from "r
 import { AppNotification, checkNotifications } from "../lib/notifications";
 import { apiGet } from "../lib/api";
 import { subscriptionArraySchema, transactionArraySchema } from "../lib/schemas";
-import { detectAnomalies, generateRecommendations, calculateCashFlow, analyzeCreditCard, projectEndOfMonth, analyzeByCategory } from "../lib/financialEngine";
+import { detectAnomalies, generateRecommendations, analyzeByCategory, calculateCashFlow, projectEndOfMonth } from "../lib/financialEngine";
 import type { Subscription, Transaction } from "../lib/types";
-import { toastError, toastInfo } from "../lib/toast";
+import { toastError } from "../lib/toast";
 
 interface NotificationContextType {
     notifications: AppNotification[];
@@ -75,11 +75,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 // We need more data for recommendations. Ideally we fetch full context, 
                 // but for now we'll do a best-effort calculation with what we have + maybe accounts/cards if available.
                 // For this implementation, we will reuse the transaction data to generate cashflow/projection
-
-                const cashFlow = calculateCashFlow(transactions.map(t => ({
-                    amountCents: t.amountCents,
-                    type: t.amountCents && t.amountCents > 0 ? 'income' : 'expense' // This is a simplification, ideally transaction object has 'type'
-                })));
 
                 // Correcting type mapping for cashflow
                 const typedTransactions = transactions.map(t => ({

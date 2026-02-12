@@ -92,7 +92,7 @@ export async function verifyBiometric(): Promise<boolean> {
         const credential = (await navigator.credentials.get({
             publicKey: {
                 challenge,
-                // Cast id to any to avoid Uint8Array vs BufferSource mismatch in TS strict mode
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 allowCredentials: [{ id: idBytes as any, type: "public-key" }],
                 userVerification: "required",
                 timeout: 60000,
@@ -100,8 +100,8 @@ export async function verifyBiometric(): Promise<boolean> {
         })) as PublicKeyCredential;
 
         return !!credential;
-    } catch (error: any) {
-        if (error.name === "NotAllowedError") {
+    } catch (error) {
+        if (error instanceof Error && error.name === "NotAllowedError") {
             console.log("User cancelled biometric prompt");
         } else {
             console.error("Biometric verification failed:", error);

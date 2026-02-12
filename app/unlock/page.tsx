@@ -29,8 +29,8 @@ export default function UnlockPage() {
             }
 
             router.push("/");
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Error inesperado");
             setPasscode("");
         } finally {
             setIsChecking(false);

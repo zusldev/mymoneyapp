@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-    User, Settings, Moon, Globe, Shield, CreditCard,
-    HelpCircle, LogOut, ChevronRight, Bell, Download,
-    Trash2, Smartphone, Check
+    User, Moon, Globe, Shield, ChevronRight, Bell, Download,
+    Trash2, Smartphone
 } from "lucide-react";
 import { toastSuccess, toastError, toastInfo } from "@/app/lib/toast";
 
@@ -113,7 +112,7 @@ export default function ProfilePage() {
             document.body.removeChild(link);
 
             toastSuccess("Exportación completada");
-        } catch (e) {
+        } catch {
             toastError("Error al exportar");
         } finally {
             setLoadingExport(false);
@@ -142,7 +141,7 @@ export default function ProfilePage() {
             } else {
                 toastError("Error al borrar datos");
             }
-        } catch (e) {
+        } catch {
             toastError("Error de conexión");
         }
     };

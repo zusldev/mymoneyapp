@@ -5,19 +5,8 @@ import { motion } from 'motion/react';
 import { useRouter } from "next/navigation";
 import Link from 'next/link';
 import {
-  ArrowUpRight,
-  TrendingUp,
-  Zap,
-  Calendar,
   Wallet,
   BrainCircuit,
-  ArrowRight,
-  ShieldCheck,
-  CreditCard,
-  Target,
-  Activity,
-  ChevronRight,
-  Sparkles as SparklesIcon,
   Plus,
   MoreHorizontal
 } from 'lucide-react';
@@ -29,13 +18,10 @@ import {
   Tooltip as RechartsTooltip
 } from 'recharts';
 
-import { apiGet } from "./lib/api"; // Removed normalizeApiError and toastError as they are not used in the provided context
+import { apiGet } from "./lib/api";
 import type { AnalysisData, Subscription } from "./lib/types";
-import { parse } from "./lib/money";
 import { formatCurrency } from "./lib/financialEngine"; // Removed formatCents as it's not used
 import { CATEGORIES, CategoryKey } from "./lib/categories";
-
-const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
 
 // ... imports
 // Removed import { SmartReportModal } from "./components/SmartReportModal";
@@ -89,6 +75,12 @@ export default function Dashboard() {
     .filter(s => s.active)
     .sort((a, b) => new Date(a.nextDate).getTime() - new Date(b.nextDate).getTime())
     .slice(0, 5);
+
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="h-10 w-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <div className="space-y-6 pb-24">

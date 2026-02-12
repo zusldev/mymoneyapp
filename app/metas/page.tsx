@@ -8,7 +8,7 @@ import type { Goal } from "../lib/types";
 import { apiGet, apiPost, normalizeApiError } from "../lib/api";
 import { goalArraySchema } from "../lib/schemas";
 import { toastError, toastSuccess } from "../lib/toast";
-import { Target, Trophy, TrendingUp, Plus, MoreHorizontal } from "lucide-react";
+import { Target, Trophy, Plus, MoreHorizontal } from "lucide-react";
 
 const colorOpts = ["#10b981", "#06b6d4", "#8b5cf6", "#f59e0b", "#ef4444", "#ec4899", "#3b82f6"];
 
@@ -94,7 +94,7 @@ export default function MetasPage() {
     );
 
     return (
-        <div className="max-w-[1600px] mx-auto space-y-8 animate-fade-in">
+        <div className="space-y-6 pb-24">
             {/* Hero Section */}
             <div className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 p-8 md:p-12 text-white shadow-2xl shadow-blue-900/20">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#2badee]/20 to-purple-600/20 pointer-events-none" />

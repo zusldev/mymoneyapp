@@ -15,6 +15,7 @@ import { Doughnut, Bar } from "react-chartjs-2";
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const defaultOptions: ChartOptions<any> = {
     responsive: true,
     maintainAspectRatio: false,
@@ -81,7 +82,7 @@ export function BarChart({ data }: { data: ChartData<"bar"> }) {
                 ticks: {
                     font: { size: 10 },
                     color: 'rgba(100, 116, 139, 0.6)',
-                    callback: (value: any) => `$${value >= 1000 ? (value / 1000) + 'k' : value}`
+                    callback: (value: string | number) => `$${Number(value) >= 1000 ? (Number(value) / 1000) + 'k' : value}`
                 }
             }
         },
