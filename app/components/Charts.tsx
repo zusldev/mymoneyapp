@@ -1,6 +1,5 @@
 "use client";
 
-import { Doughnut, Bar } from "react-chartjs-2";
 import {
     Chart as ChartJS,
     ArcElement,
@@ -9,125 +8,92 @@ import {
     CategoryScale,
     LinearScale,
     BarElement,
+    ChartData,
+    ChartOptions
 } from "chart.js";
+import { Doughnut, Bar } from "react-chartjs-2";
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
-// ─── Doughnut Chart (Category Breakdown) ───
-export function DoughnutChart({
-    data,
-}: {
-    data: { label: string; total: number; color: string }[];
-}) {
-    const chartData = {
-        labels: data.map((d) => d.label),
-        datasets: [
-            {
-                data: data.map((d) => d.total),
-                backgroundColor: data.map((d) => d.color + "cc"),
-                borderColor: data.map((d) => d.color),
-                borderWidth: 2,
-                hoverOffset: 8,
-                spacing: 2,
-            },
-        ],
-    };
+const defaultOptions: ChartOptions<any> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: {
+            position: 'bottom' as const,
+            labels: {
+                boxWidth: 12,
+                padding: 15,
+                font: { size: 11, weight: 'bold' },
+                color: 'rgba(100, 116, 139, 0.8)'
+            }
+        },
+        tooltip: {
+            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+            padding: 12,
+            cornerRadius: 12,
+            titleFont: { size: 13, weight: 'bold' },
+            bodyFont: { size: 12 },
+            usePointStyle: true,
+        }
+    }
+};
 
-    const options = {
-        responsive: true,
-        maintainAspectRatio: true,
-        cutout: "65%",
+export function DoughnutChart({ data }: { data: ChartData<"doughnut"> }) {
+    const options: ChartOptions<"doughnut"> = {
+        ...defaultOptions,
+        cutout: '70%',
         plugins: {
-            legend: { display: false },
-            tooltip: {
-                backgroundColor: "rgba(13, 17, 23, 0.9)",
-                titleColor: "#f0f2f5",
-                bodyColor: "#c9d1d9",
-                borderColor: "rgba(33, 38, 45, 0.5)",
-                borderWidth: 1,
-                cornerRadius: 12,
-                padding: 12,
-                callbacks: {
-                    label: (ctx: { label: string; parsed: number }) => {
-                        return ` $${ctx.parsed.toLocaleString("es-MX")}`;
-                    },
-                },
-            },
-        },
-        animation: {
-            animateRotate: true,
-            duration: 1200,
-        },
+            ...defaultOptions.plugins,
+            legend: { ...defaultOptions.plugins?.legend, display: true }
+        }
     };
 
-    return <Doughnut data={chartData} options={options} />;
+    return (
+        <div className="relative w-full h-64 md:h-80">
+            <Doughnut data={data} options={options} />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-[-20px]">
+                <div className="text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total</p>
+                    <p className="text-xl font-black text-slate-900 dark:text-white">Gastos</p>
+                </div>
+            </div>
+        </div>
+    );
 }
 
-// ─── Bar Chart (Income vs Expenses) ───
-export function BarChart({
-    income,
-    expenses,
-}: {
-    income: number;
-    expenses: number;
-}) {
-    const chartData = {
-        labels: ["Ingresos", "Gastos"],
-        datasets: [
-            {
-                data: [income, expenses],
-                backgroundColor: ["rgba(6, 214, 160, 0.7)", "rgba(251, 113, 133, 0.7)"],
-                borderColor: ["#06d6a0", "#fb7185"],
-                borderWidth: 2,
-                borderRadius: 12,
-                borderSkipped: false,
-                barThickness: 60,
-            },
-        ],
-    };
-
-    const options = {
-        responsive: true,
-        maintainAspectRatio: true,
-        aspectRatio: 2,
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                backgroundColor: "rgba(13, 17, 23, 0.9)",
-                titleColor: "#f0f2f5",
-                bodyColor: "#c9d1d9",
-                borderColor: "rgba(33, 38, 45, 0.5)",
-                borderWidth: 1,
-                cornerRadius: 12,
-                padding: 12,
-                callbacks: {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    label: (ctx: any) => {
-                        return ` $${(ctx.parsed.y || 0).toLocaleString("es-MX")}`;
-                    },
-                },
-            },
-        },
+export function BarChart({ data }: { data: ChartData<"bar"> }) {
+    const options: ChartOptions<"bar"> = {
+        ...defaultOptions,
         scales: {
             x: {
                 grid: { display: false },
-                ticks: { color: "#8b949e", font: { size: 12 } },
-                border: { display: false },
+                ticks: {
+                    font: { size: 10, weight: 'bold' },
+                    color: 'rgba(100, 116, 139, 0.6)'
+                }
             },
             y: {
-                grid: { color: "rgba(33, 38, 45, 0.3)" },
-                ticks: {
-                    color: "#8b949e",
-                    font: { size: 11 },
-                    callback: (value: string | number) => `$${Number(value).toLocaleString("es-MX")}`,
+                beginAtZero: true,
+                grid: {
+                    color: 'rgba(100, 116, 139, 0.1)',
                 },
-                border: { display: false },
-            },
+                ticks: {
+                    font: { size: 10 },
+                    color: 'rgba(100, 116, 139, 0.6)',
+                    callback: (value: any) => `$${value >= 1000 ? (value / 1000) + 'k' : value}`
+                }
+            }
         },
-        animation: {
-            duration: 1000,
-        },
+        plugins: {
+            ...defaultOptions.plugins,
+            legend: { display: false }
+        }
     };
 
-    return <Bar data={chartData} options={options} />;
+    return (
+        <div className="w-full h-64 md:h-80">
+            <Bar data={data} options={options} />
+        </div>
+    );
 }

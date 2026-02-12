@@ -15,6 +15,7 @@
   --color-surface-light: #ffffff;
   --color-surface-dark: #1a262d;
   --color-success: #34d399;
+  --color-danger: #f43f5e;
   --color-soft-blue: #e0f2fe;
 
   /* Liquid Glass tokens */
@@ -27,6 +28,29 @@
   --glass-bg-dark: rgba(15, 31, 37, 0.5);
   --glass-border-light: rgba(255, 255, 255, 0.42);
   --glass-border-dark: rgba(255, 255, 255, 0.08);
+
+  /* Semantic Tokens */
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --icon-default: var(--color-icon-default);
+  --border-default: var(--color-border-default);
+}
+
+:root {
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  --color-icon-default: #64748b;
+  --color-border-default: #e2e8f0;
+}
+
+.dark {
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+  --color-icon-default: #94a3b8;
+  --color-border-default: #334155;
 }
 
 /* ═══ Global Resets ═══ */
@@ -41,7 +65,7 @@
 
 body {
   background: var(--color-background-light);
-  color: #1e293b;
+  color: var(--color-text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
   min-height: 100dvh;
   overflow-x: hidden;
@@ -51,44 +75,32 @@ body {
 
 .dark body {
   background: var(--color-background-dark);
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 /* ═══ Semantic Color Utilities ═══ */
 .text-foreground {
-  color: #1e293b;
-}
-
-.dark .text-foreground {
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .text-muted {
-  color: #64748b;
-}
-
-.dark .text-muted {
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .text-muted-light {
-  color: #475569;
-}
-
-.dark .text-muted-light {
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
 }
 
 .text-cyan {
-  color: #2badee;
+  color: var(--color-primary);
 }
 
 .text-accent {
-  color: #2badee;
+  color: var(--color-primary);
 }
 
 .text-rose {
-  color: #f43f5e;
+  color: var(--color-danger);
 }
 
 .bg-surface-hover {

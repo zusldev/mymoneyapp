@@ -13,31 +13,20 @@ import { toastSuccess, toastError, toastInfo } from "@/app/lib/toast";
 import { registerBiometric, verifyBiometric, isBiometricSupported } from "@/app/lib/biometrics";
 import { Transaction } from "@/app/lib/types";
 import { LucideIcon } from "lucide-react";
+import { useTheme } from "../context/ThemeProvider";
 
 export default function ProfilePage() {
-    const [darkMode, setDarkMode] = useState(false);
+    const { theme, toggleTheme } = useTheme();
     const [notifications, setNotifications] = useState(false);
     const [faceId, setFaceId] = useState(false);
     const [loadingExport, setLoadingExport] = useState(false);
 
-    // 1. Dark Mode Persistence
+    // 1. Persistence & State Sync
     useEffect(() => {
-        const isDark = localStorage.getItem("theme") === "dark" ||
-            (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
-        setDarkMode(isDark);
-        document.documentElement.classList.toggle("dark", isDark);
-
         // Check Face ID state
         const faceEnabled = localStorage.getItem("faceIdEnabled") === "true";
         setFaceId(faceEnabled);
     }, []);
-
-    const toggleDarkMode = () => {
-        const newMode = !darkMode;
-        setDarkMode(newMode);
-        document.documentElement.classList.toggle("dark", newMode);
-        localStorage.setItem("theme", newMode ? "dark" : "light");
-    };
 
     // 2. Notifications Logic
     const toggleNotifications = async () => {
@@ -203,8 +192,8 @@ export default function ProfilePage() {
                             color="bg-purple-500"
                             label="Modo Oscuro"
                             isToggle
-                            value={darkMode}
-                            onChange={toggleDarkMode}
+                            value={theme === "dark"}
+                            onChange={toggleTheme}
                         />
 
                         <SettingItem
