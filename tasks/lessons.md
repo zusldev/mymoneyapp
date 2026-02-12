@@ -60,3 +60,8 @@
 - **What happened**: After correcting malformed `DATABASE_URL`, production APIs still returned 500 with `MaxClientsInSessionMode`.
 - **Root cause**: Per-instance `pg.Pool` size was too high for Vercel serverless concurrency against Supabase Session Pooler limits.
 - **Rule**: In serverless production, keep Prisma adapter `pg.Pool` tiny by default (`max=1`) and make it configurable via env for controlled scaling.
+
+### 2026-02-11 — Local proxy env can break GitHub/Vercel diagnostics
+- **What happened**: `gh`/`vercel` commands intermittently failed with connection errors (`proxyconnect tcp ... 127.0.0.1:9`) during PR and deploy incident analysis.
+- **Root cause**: `HTTP_PROXY`/`HTTPS_PROXY` were set to a dead local proxy in the shell profile, so network CLIs could not reach GitHub/Vercel APIs.
+- **Rule**: Before diagnosing CI/deploy issues, verify proxy env vars (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`) and clear invalid values in the current shell session.

@@ -42,7 +42,7 @@
 body {
   background: var(--color-background-light);
   color: #1e293b;
-  font-family: "Avenir Next", "Avenir", "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
   min-height: 100dvh;
   overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
@@ -1163,7 +1163,7 @@ textarea:focus-visible {
     min-width: auto !important;
   }
 
-  .calendar-grid-mobile > * {
+  .calendar-grid-mobile>* {
     min-height: 60px;
     font-size: 0.75rem;
   }

@@ -1,195 +1,167 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { formatCurrency } from "./lib/financialEngine";
-import { CATEGORIES } from "./lib/categories";
-import type { AnalysisData } from "./lib/types";
-import { apiGet, normalizeApiError } from "./lib/api";
-import { subscriptionArraySchema } from "./lib/schemas";
-import { toastError } from "./lib/toast";
-import { parse, percentages, toMajorUnits } from "./lib/money";
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import Link from 'next/link';
+import {
+  ArrowUpRight,
+  TrendingUp,
+  Zap,
+  Calendar,
+  Wallet,
+  BrainCircuit,
+  ArrowRight,
+  ShieldCheck,
+  CreditCard,
+  Target,
+  Activity,
+  ChevronRight,
+  Sparkles as SparklesIcon,
+  Plus,
+  MoreHorizontal
+} from 'lucide-react';
+import {
+  Cell,
+  PieChart,
+  Pie,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip
+} from 'recharts';
 
-// Subscription type for upcoming payments
-interface UpcomingSub {
-  id: string;
-  name: string;
-  amount?: number;
-  amountCents?: number;
-  category: string;
-  nextDate: string;
-  color: string;
-  active?: boolean;
-}
+import { apiGet, normalizeApiError } from "./lib/api";
+import { toastError } from "./lib/toast";
+import type { AnalysisData, Subscription } from "./lib/types";
+import { parse } from "./lib/money";
+import { formatCurrency } from "./lib/financialEngine";
+import { CATEGORIES, CategoryKey } from "./lib/categories";
+
+const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
+
+// ... imports
+import { SmartReportModal } from "./components/SmartReportModal";
 
 export default function Dashboard() {
   const [data, setData] = useState<AnalysisData | null>(null);
-  const [subs, setSubs] = useState<UpcomingSub[]>([]);
+  const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState<number>(0);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     Promise.all([
       apiGet<AnalysisData>("/api/analysis"),
-      apiGet("/api/subscriptions", subscriptionArraySchema),
+      apiGet<Subscription[]>("/api/subscriptions")
     ])
       .then(([analysisData, subsData]) => {
         setData(analysisData);
-        setSubs(Array.isArray(subsData) ? (subsData as UpcomingSub[]) : []);
-        setNow(Date.now());
+        setSubs(Array.isArray(subsData) ? subsData : []);
       })
       .catch((error) => {
-        const failure = normalizeApiError(error);
-        toastError(failure.error);
+        console.error("Failed to fetch dashboard data", error);
       })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 border-4 border-[#2badee]/30 border-t-[#2badee] rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Analizando tus finanzas...</p>
-        </div>
-      </div>
-    );
-  }
+  // Calculated values
+  const healthScore = data ? Math.min(Math.round((data.cashFlow.savingsRate || 0) * 2 + 50), 100) : 65;
+  const healthLabel = healthScore >= 80 ? "Excelente" : healthScore >= 60 ? "Buena" : "Regular";
 
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-slate-500">Error al cargar datos</p>
-      </div>
-    );
-  }
+  const totalBalance = data?.overview.totalBalance ?? 0;
+  const estimatedSavings = (data?.cashFlow.totalIncome ?? 0) - (data?.cashFlow.totalExpenses ?? 0);
 
-  const totalBalanceCents = data.overview.totalBalanceCents ?? parse(data.overview.totalBalance);
-  const totalDebtCents = data.overview.totalDebtCents ?? parse(data.overview.totalDebt);
-  const netBalanceCents = data.cashFlow.netBalanceCents ?? parse(data.cashFlow.netBalance);
-  const totalIncomeCents = data.cashFlow.totalIncomeCents ?? parse(data.cashFlow.totalIncome);
-  const totalExpensesCents = data.cashFlow.totalExpensesCents ?? parse(data.cashFlow.totalExpenses);
+  // Budget Progress
+  const income = data?.cashFlow.totalIncome ?? 0;
+  const expenses = data?.cashFlow.totalExpenses ?? 0;
+  const budgetProgress = income > 0 ? (expenses / income) * 100 : 0;
 
-  // Compute health score (0-100) based on savings rate, debt ratio, goals progress
-  const savingsScore = Math.min(data.cashFlow.savingsRate * 2, 40); // max 40 pts
-  const debtScore = totalBalanceCents > 0
-    ? Math.max(0, 30 - (percentages(totalDebtCents, totalBalanceCents, { clamp: false, decimals: 2 }) / 100) * 30)
-    : 15; // max 30 pts
-  const goalsScore = data.goals.length > 0
-    ? (data.goals.reduce((sum, g) => sum + g.progress, 0) / data.goals.length) * 0.3
-    : 15; // max 30 pts
-  const healthScore = Math.round(Math.min(savingsScore + debtScore + goalsScore, 100));
-  const healthLabel = healthScore >= 80 ? "Excelente" : healthScore >= 60 ? "Buena" : healthScore >= 40 ? "Regular" : "Necesita Atención";
+  // Category Mix
+  const categoryData = data?.categoryBreakdown.map(c => ({
+    name: c.label,
+    value: c.total,
+    color: c.color
+  })) || [];
 
-  // Budget data — income as limit, expenses as spent
-  const budgetLimitCents = Math.max(1, totalIncomeCents);
-  const budgetSpentCents = totalExpensesCents;
-  const budgetPct = percentages(budgetSpentCents, budgetLimitCents, { clamp: true, decimals: 0 });
+  // Top 3 Categories for Budget Card
+  const topCategories = data?.categoryBreakdown.slice(0, 3) || [];
 
-  // Top 3 categories for budget breakdown
-  const topCats = data.categoryBreakdown.slice(0, 3);
-
-  // Spending mix for donut — group into Needs/Wants/Savings
-  const needsCats = ["hogar", "supermercado", "servicios", "salud", "transporte"];
-  const wantsCats = ["comida", "entretenimiento", "compras", "viajes", "suscripciones"];
-  const totalExpenses = toMajorUnits(Math.max(1, totalExpensesCents));
-
-  const needsTotalCents = data.categoryBreakdown
-    .filter((c) => needsCats.includes(c.category))
-    .reduce((s, c) => s + (c.totalCents ?? parse(c.total)), 0);
-  const wantsTotalCents = data.categoryBreakdown
-    .filter((c) => wantsCats.includes(c.category))
-    .reduce((s, c) => s + (c.totalCents ?? parse(c.total)), 0);
-  const savingsTotalCents = Math.max(0, netBalanceCents);
-  const mixTotalCents = Math.max(1, needsTotalCents + wantsTotalCents + savingsTotalCents);
-
-  const needsPct = percentages(needsTotalCents, mixTotalCents, { clamp: true, decimals: 0 });
-  const wantsPct = percentages(wantsTotalCents, mixTotalCents, { clamp: true, decimals: 0 });
-  const savingsPct = 100 - needsPct - wantsPct;
-
-  // Savings change indicator
-  const savingsChange = data.cashFlow.savingsRate > 0 ? `+${data.cashFlow.savingsRate}%` : `${data.cashFlow.savingsRate}%`;
-
-  // Upcoming payments from subscriptions sorted by date
-  const upcomingPayments = [...subs]
-    .filter((s) => s.active !== false)
+  // Upcoming Subscriptions (sorted by next date)
+  const upcomingSubs = subs
+    .filter(s => s.active)
     .sort((a, b) => new Date(a.nextDate).getTime() - new Date(b.nextDate).getTime())
-    .slice(0, 6);
-
-  // Category icons
-  const getCatIcon = (category: string) => {
-    const map: Record<string, string> = {
-      hogar: "home", comida: "restaurant", supermercado: "shopping_cart",
-      transporte: "directions_car", entretenimiento: "movie", salud: "fitness_center",
-      servicios: "bolt", compras: "shopping_bag", educacion: "school",
-      viajes: "flight", suscripciones: "sync", otros: "more_horiz",
-    };
-    return map[category] || "payments";
-  };
-
-  // Days until
-  const daysUntil = (dateStr: string) => {
-    if (!now) return "";
-    const diff = Math.ceil((new Date(dateStr).getTime() - now) / (1000 * 60 * 60 * 24));
-    if (diff <= 0) return "Hoy";
-    if (diff === 1) return "Mañana";
-    if (diff <= 7) return `En ${diff} días`;
-    return new Date(dateStr).toLocaleDateString("es-MX", { day: "numeric", month: "short" });
-  };
+    .slice(0, 5);
 
   return (
-    <div className="space-y-8 stagger-children">
-      {/* ═══ Blue ambient — Dashboard identity ═══ */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
-        <div className="absolute -top-20 right-10 w-[420px] h-[420px] rounded-full opacity-[0.05]"
-          style={{ background: 'radial-gradient(circle, #2badee, transparent 70%)' }} />
-        <div className="absolute top-1/2 -left-32 w-[350px] h-[350px] rounded-full opacity-[0.035]"
-          style={{ background: 'radial-gradient(circle, #2badee, transparent 70%)' }} />
-      </div>
+    <div className="space-y-6 pb-24">
+      <SmartReportModal
+        isOpen={showReport}
+        onClose={() => setShowReport(false)}
+        data={data ? {
+          healthScore,
+          cashFlow: {
+            ...data.cashFlow,
+            totalIncomeCents: data.cashFlow.totalIncomeCents ?? 0,
+            totalExpensesCents: data.cashFlow.totalExpensesCents ?? 0,
+            netBalanceCents: data.cashFlow.netBalanceCents ?? 0,
+          },
+          categoryBreakdown: data.categoryBreakdown.map(c => ({
+            ...c,
+            category: c.category as CategoryKey,
+            totalCents: c.totalCents ?? 0
+          })),
+          recommendations: data.recommendations.map(r => ({
+            ...r,
+            category: r.category as "pago" | "ahorro" | "gasto" | "suscripcion" | "presupuesto"
+          }))
+        } : null}
+      />
 
-      {/* ═══ Top Row: Hero Card & Key Metrics ═══ */}
+      {/* ═ ROW 1: Health Score & Main Stats ═ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Glassmorphic Hero Card: Health Score */}
-        <div className="lg:col-span-8 liquid-glass-cyan liquid-shimmer-edge rounded-2xl p-6 md:p-8 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 group liquid-settle">
-          {/* Decorative blob */}
-          <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#2badee]/10 rounded-full blur-3xl group-hover:bg-[#2badee]/20 transition-all duration-500" />
 
-          <div className="relative z-10 flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-[#2badee]/10 text-[#2badee] text-xs font-bold uppercase tracking-wider">
-                AI Analysis
-              </span>
-              <span className="text-xs text-slate-400">Actualizado ahora</span>
-            </div>
-            <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">
-              Salud {healthLabel}
-            </h2>
-            <p className="text-slate-500 dark:text-slate-300 mb-6 max-w-md">
-              {data.cashFlow.savingsRate > 0 ? (
-                <>Tus hábitos financieros se ven muy bien. Has reducido gastos discrecionales en <span className="text-[#34d399] font-medium">{data.cashFlow.savingsRate}%</span> comparado con tus ingresos.</>
-              ) : (
-                <>Tus gastos superan tus ingresos este mes. Revisa tus categorías de gasto para encontrar oportunidades de ahorro.</>
-              )}
-            </p>
-            <div className="flex gap-3">
-              <button className="btn-primary">Ver Reporte Completo</button>
-              <button className="btn-secondary">Editar Metas</button>
-            </div>
-          </div>
+        {/* Health Score (Left - Wide) */}
+        <div className="lg:col-span-8 bg-blue-50/50 dark:bg-slate-800/50 border border-blue-100 dark:border-slate-700/50 rounded-[2.5rem] p-8 relative overflow-hidden flex flex-col justify-center">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
 
-          {/* Score Gauge */}
-          <div className="relative w-40 h-40 flex-shrink-0 control-pulse">
-            <div className="absolute inset-0 rounded-full border-8 border-slate-100 dark:border-slate-700/50" />
-            <div
-              className="absolute inset-0 rounded-full"
-              style={{
-                background: `conic-gradient(#2badee, #34d399 ${healthScore}%, transparent ${healthScore}%)`,
-                mask: "radial-gradient(transparent 62%, black 63%)",
-                WebkitMask: "radial-gradient(transparent 62%, black 63%)",
-              }}
-            />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold text-slate-800 dark:text-white">{healthScore}</span>
-              <span className="text-xs text-slate-400 font-medium uppercase mt-1">Score</span>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
+            <div className="text-center md:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-4">
+                <BrainCircuit size={12} /> AI Analysis
+              </div>
+              <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-2">Salud {healthLabel}</h2>
+              <p className="text-slate-500 dark:text-slate-400 text-sm max-w-md leading-relaxed">
+                Tus hábitos financieros se ven muy bien. Has mantenido un ritmo de ahorro del {data?.cashFlow.savingsRate ?? 0}% este mes.
+              </p>
+              <div className="flex flex-wrap gap-3 mt-6 justify-center md:justify-start">
+                <button
+                  onClick={() => setShowReport(true)}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                >
+                  Ver Reporte
+                </button>
+                <Link href="/metas" className="px-6 py-2.5 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 text-slate-700 dark:text-white rounded-xl text-sm font-bold border border-slate-200 dark:border-slate-600 transition-all">
+                  Editar Metas
+                </Link>
+              </div>
+            </div>
+
+            {/* Gauge */}
+            <div className="relative w-40 h-40 shrink-0">
+              <svg className="w-full h-full -rotate-90">
+                {/* Background Track */}
+                <circle cx="80" cy="80" r="70" fill="none" stroke="#e2e8f0" strokeWidth="12" className="dark:stroke-slate-700" />
+                {/* Progress */}
+                <motion.circle
+                  cx="80" cy="80" r="70" fill="none" stroke="#2563eb" strokeWidth="12"
+                  strokeDasharray="439.8"
+                  initial={{ strokeDashoffset: 439.8 }}
+                  animate={{ strokeDashoffset: 439.8 * (1 - healthScore / 100) }}
+                  transition={{ duration: 1.5, ease: "easeOut" }}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-4xl font-black text-slate-900 dark:text-white">{healthScore}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score</span>
+              </div>
             </div>
           </div>
         </div>
@@ -197,198 +169,170 @@ export default function Dashboard() {
         {/* Right Column: Balance & Savings */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           {/* Balance Card */}
-          <div className="liquid-card liquid-card-hover rounded-xl p-5 md:p-6 flex-1 flex flex-col justify-center">
-            <div className="flex justify-between items-start mb-2">
-              <div className="p-2 bg-[#e0f2fe] dark:bg-[#2badee]/20 rounded-lg text-[#2badee]">
-                <span className="material-icons-round text-xl">account_balance</span>
-              </div>
-              <span className={`text-xs font-medium px-2 py-1 rounded ${data.cashFlow.savingsRate >= 0
-                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                }`}>
-                {savingsChange}
-              </span>
+          <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-[2rem] p-6 shadow-sm flex-1 flex flex-col justify-center relative overflow-hidden group">
+            <div className="absolute right-4 top-4 p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+              <span className="text-xs font-bold">+2.5%</span>
             </div>
-            <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Balance Total</span>
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1 tabular-nums">
-              {formatCurrency(toMajorUnits(totalBalanceCents))}
-            </h3>
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center mb-4 text-2xl">
+              <span className="material-icons-round">account_balance</span>
+            </div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Balance Total</p>
+            <h3 className="text-3xl font-black text-slate-900 dark:text-white">{formatCurrency(totalBalance)}</h3>
           </div>
 
-          {/* Est Savings Card */}
-          <div className="liquid-card liquid-card-hover rounded-xl p-5 md:p-6 flex-1 flex flex-col justify-center relative overflow-hidden">
-            <div className="absolute right-0 bottom-0 opacity-10 text-[#2badee] pointer-events-none transform translate-x-2 translate-y-2">
-              <span className="material-icons-round text-8xl">trending_up</span>
+          {/* Savings Card */}
+          <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-[2rem] p-6 shadow-sm flex-1 flex flex-col justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 flex items-center justify-center mb-4 text-2xl">
+              <span className="material-icons-round">savings</span>
             </div>
-            <div className="flex justify-between items-start mb-2">
-              <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-500">
-                <span className="material-icons-round text-xl">savings</span>
-              </div>
-            </div>
-            <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Ahorro Est. (Mes)</span>
-            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mt-1 tabular-nums">
-              {data.cashFlow.netBalance >= 0 ? "+" : ""}{formatCurrency(data.cashFlow.netBalance)}
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ahorro Est. (Mes)</p>
+            <h3 className="text-3xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+              {estimationSign(estimatedSavings)}{formatCurrency(Math.abs(estimatedSavings))}
             </h3>
-            <p className="text-xs text-slate-400 mt-2">Basado en la trayectoria actual</p>
+            <p className="text-[10px] text-slate-400 mt-2">Basado en tu flujo actual</p>
           </div>
         </div>
       </div>
 
-      {/* ═══ Middle Row: Budget & Spending Mix ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Monthly Budget (2 cols) */}
-        <div className="lg:col-span-2 liquid-card rounded-xl p-5 md:p-6">
-          <div className="flex items-center justify-between mb-6">
+      {/* ═ ROW 2: Budget & Mix ═ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        {/* Budget Progress (Left) */}
+        <div className="lg:col-span-8 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-[2.5rem] p-8 shadow-sm">
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Presupuesto Mensual</h3>
-              <p className="text-sm text-slate-500">Has gastado {budgetPct.toFixed(0)}% de tus ingresos</p>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">Presupuesto Mensual</h3>
+              <p className="text-sm text-slate-500 mt-1">Has gastado {Math.round(budgetProgress)}% de tus ingresos</p>
             </div>
-            <button className="p-2 text-slate-400 hover:text-[#2badee] transition-colors">
-              <span className="material-icons-round">more_horiz</span>
-            </button>
+            <button className="text-slate-400 hover:text-slate-600"><MoreHorizontal /></button>
           </div>
 
-          {/* Main Budget Bar */}
-          <div className="mb-8">
-            <div className="flex justify-between text-sm font-medium mb-2">
-              <span className="text-slate-700 dark:text-slate-200">{formatCurrency(toMajorUnits(budgetSpentCents))} Gastado</span>
-              <span className="text-slate-500">{formatCurrency(toMajorUnits(budgetLimitCents))} Ingreso</span>
-            </div>
-            <div className="h-4 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#2badee] rounded-full transition-all duration-1000"
-                style={{ width: `${budgetPct}%` }}
-              />
-            </div>
+          {/* Progress Bar */}
+          <div className="mb-2 flex justify-between text-xs font-bold text-slate-500">
+            <span className="text-slate-900 dark:text-white">{formatCurrency(expenses)} Gastado</span>
+            <span>{formatCurrency(income)} Ingreso</span>
+          </div>
+          <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-8">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(budgetProgress, 100)}%` }}
+              className={`h-full rounded-full ${budgetProgress > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
+            />
           </div>
 
-          {/* Categories breakdown */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {topCats.map((cat) => (
-              <div key={cat.category} className="p-4 rounded-lg liquid-card">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                  <span className="text-xs font-semibold text-slate-500 uppercase">{cat.label}</span>
+          {/* Top Categories Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {topCategories.map(cat => (
+              <div key={cat.label} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2 h-2 rounded-full" style={{ background: cat.color }} />
+                  <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">{cat.label}</span>
                 </div>
-                <div className="text-lg font-bold text-slate-800 dark:text-white tabular-nums">
-                  {formatCurrency(toMajorUnits(cat.totalCents ?? parse(cat.total)))}
-                </div>
-                <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full mt-2">
-                  <div
-                    className="h-1.5 rounded-full transition-all duration-1000"
-                    style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
-                  />
+                <p className="text-xl font-black text-slate-900 dark:text-white">{formatCurrency(cat.total)}</p>
+                <div className="h-1 bg-slate-200 dark:bg-slate-600 rounded-full mt-3 overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${cat.percentage}%`, background: cat.color }} />
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Donut Chart — Spending Mix */}
-        <div className="lg:col-span-1 liquid-card rounded-xl p-5 md:p-6 flex flex-col">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Mix de Gastos</h3>
-          <div className="flex-1 flex items-center justify-center relative">
-            {/* CSS Donut Chart */}
-            <div
-              className="relative w-48 h-48 rounded-full"
-              style={{
-                background: `conic-gradient(#3b82f6 0% ${needsPct}%, #a855f7 ${needsPct}% ${needsPct + wantsPct}%, #fbbf24 ${needsPct + wantsPct}% ${needsPct + wantsPct + savingsPct}%, #cbd5e1 ${needsPct + wantsPct + savingsPct}% 100%)`,
-              }}
-            >
-              <div className="absolute inset-4 bg-white dark:bg-[#1a262d] rounded-full flex items-center justify-center flex-col shadow-inner">
-                <span className="text-xs text-slate-400 font-medium uppercase">Total</span>
-                <span className="text-xl font-bold text-slate-800 dark:text-white tabular-nums">
-                  {formatCurrency(totalExpenses)}
-                </span>
-              </div>
+        {/* Expenses Mix (Donut) */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-[2.5rem] p-8 shadow-sm flex flex-col">
+          <h3 className="text-xl font-black text-slate-900 dark:text-white mb-6">Mix de Gastos</h3>
+
+          <div className="relative flex-1 min-h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={categoryData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {categoryData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(value: string | number | undefined) => formatCurrency(Number(value) || 0)}
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Center Text */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Total</span>
+              <span className="text-xl font-black text-slate-900 dark:text-white">{formatCurrency(expenses)}</span>
             </div>
           </div>
-          <div className="mt-6 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-slate-600 dark:text-slate-300">Necesidades</span>
+
+          <div className="flex justify-between text-xs text-slate-500 mt-4 px-2">
+            {/* Legend (Simplified) */}
+            {categoryData.slice(0, 3).map(c => (
+              <div key={c.name} className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ background: c.color }} />
+                <span>{c.name}</span>
               </div>
-              <span className="font-medium">{needsPct}%</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-purple-500" />
-                <span className="text-slate-600 dark:text-slate-300">Deseos</span>
-              </div>
-              <span className="font-medium">{wantsPct}%</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-amber-400" />
-                <span className="text-slate-600 dark:text-slate-300">Ahorro</span>
-              </div>
-              <span className="font-medium">{savingsPct}%</span>
-            </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ═══ Bottom Row: Upcoming Payments ═══ */}
-      {upcomingPayments.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white">Próximos Pagos</h3>
-            <a className="text-sm text-[#2badee] hover:text-[#1a8cb5] font-medium" href="/suscripciones">
-              Ver Calendario
-            </a>
-          </div>
-
-          {/* Horizontal Scroller */}
-          <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4 snap-x">
-            {upcomingPayments.map((sub) => {
-              const catIcon = getCatIcon(sub.category);
-              const daysLabel = daysUntil(sub.nextDate);
-              const isUrgent = daysLabel === "Hoy" || daysLabel === "Mañana";
-              const catInfo = CATEGORIES[sub.category as keyof typeof CATEGORIES] || CATEGORIES.otros;
-
-              return (
-                <div
-                  key={sub.id}
-                  className="snap-start min-w-[260px] md:min-w-[280px] liquid-card liquid-card-hover rounded-xl p-4 md:p-5 group cursor-pointer"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"
-                      style={{ backgroundColor: catInfo.color + "15", color: catInfo.color }}
-                    >
-                      <span className="material-icons-round">{catIcon}</span>
-                    </div>
-                    <span className={`text-xs font-bold px-2 py-1 rounded ${isUrgent
-                      ? "text-[#2badee] bg-[#2badee]/10"
-                      : "text-slate-400 bg-slate-100 dark:bg-slate-800"
-                      }`}>
-                      {daysLabel}
-                    </span>
-                  </div>
-                  <h4 className="font-bold text-slate-800 dark:text-white">{sub.name}</h4>
-                  <div className="flex justify-between items-center mt-2">
-                    <p className="text-sm text-slate-500">{catInfo.label}</p>
-                    <span className="font-bold text-slate-800 dark:text-white tabular-nums">
-                      {formatCurrency(toMajorUnits(sub.amountCents ?? parse(sub.amount ?? 0)))}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Add New Button */}
-            <div className="snap-start min-w-[100px] flex items-center justify-center">
-              <a
-                href="/suscripciones"
-                className="h-12 w-12 rounded-full border-2 border-dashed border-slate-300 hover:border-[#2badee] text-slate-400 hover:text-[#2badee] transition-colors flex items-center justify-center"
-              >
-                <span className="material-icons-round">add</span>
-              </a>
-            </div>
-          </div>
+      {/* ═ ROW 3: Upcoming Payments ═ */}
+      <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-[2.5rem] p-8 shadow-sm">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-black text-slate-900 dark:text-white">Próximos Pagos</h3>
+          <Link href="/calendario" className="text-sm font-bold text-blue-600 hover:text-blue-700">Ver Calendario</Link>
         </div>
-      )}
+
+        <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar snap-x">
+          {upcomingSubs.length === 0 && (
+            <p className="text-slate-400 text-sm">No hay pagos próximos registrados.</p>
+          )}
+          {upcomingSubs.map(sub => {
+            const daysUntil = Math.ceil((new Date(sub.nextDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+            const isToday = daysUntil === 0;
+            return (
+              <div key={sub.id} className="min-w-[200px] bg-slate-50 dark:bg-slate-700/30 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 snap-start flex flex-col justify-between h-[140px] group hover:border-blue-200 transition-colors">
+                <div className="flex justify-between items-start">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm ${sub.color ? '' : 'bg-white'}`} style={sub.color ? { background: `${sub.color}20`, color: sub.color } : {}}>
+                    {sub.icon ? <span className="material-icons-round">{sub.icon}</span> : <Wallet size={20} />}
+                  </div>
+                  <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${isToday ? 'bg-red-100 text-red-600' : 'bg-white dark:bg-slate-800 text-slate-500'}`}>
+                    {isToday ? 'Hoy' : `En ${daysUntil} días`}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-white truncate">{sub.name}</p>
+                  <p className="text-xs text-slate-500">{CATEGORIES[sub.category as CategoryKey]?.label || sub.category}</p>
+                </div>
+                <div className="text-right">
+                  <span className="font-black text-lg text-slate-900 dark:text-white">{formatCurrency(sub.amount || 0)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═ Add Button Block ═ */}
+      <div className="flex justify-center pt-4">
+        <Link href="/transacciones?new=true" className="flex items-center gap-2 px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-sm font-bold shadow-xl hover:scale-105 transition-transform">
+          <Plus size={18} /> Registrar Movimiento Rápido
+        </Link>
+      </div>
+
     </div>
   );
+}
+
+function estimationSign(val: number) {
+  if (val > 0) return "+";
+  if (val < 0) return "-";
+  return "";
 }
