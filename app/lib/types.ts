@@ -179,7 +179,7 @@ export interface TransactionAnomaly {
   txId: string;
   type: string;
   label: string;
-  severity: "info" | "warn" | "danger";
+  severity: "info" | "warning" | "danger";
 }
 
 /* ═══ Dashboard ═══ */
@@ -249,6 +249,7 @@ export interface AnalysisData {
     title: string;
     description: string;
     impact: string;
+    actionable: boolean;
   }[];
   subscriptions: { count: number; monthlyTotalCents?: number; monthlyTotal: number };
   income: { expectedMonthlyCents?: number; expectedMonthly: number };
