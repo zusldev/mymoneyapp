@@ -10,6 +10,7 @@ export default function UnlockPage() {
     const [passcode, setPasscode] = useState("");
     const [isChecking, setIsChecking] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [faceIdEnabled, setFaceIdEnabled] = useState(false);
     const router = useRouter();
 
     const login = useCallback(async (data: { passcode?: string; isBiometric?: boolean }) => {
@@ -47,6 +48,7 @@ export default function UnlockPage() {
 
     useEffect(() => {
         const enabled = localStorage.getItem("faceIdEnabled") === "true";
+        setFaceIdEnabled(enabled);
         if (enabled) {
             // Slight delay for better reliability on PWA mount
             const timer = setTimeout(handleBiometric, 800);
@@ -68,8 +70,8 @@ export default function UnlockPage() {
             <div
                 key={i}
                 className={`w-4 h-4 rounded-full border-2 transition-all duration-300 ${passcode.length > i
-                        ? "bg-blue-500 border-blue-500 scale-125"
-                        : "border-slate-300 dark:border-slate-700"
+                    ? "bg-blue-500 border-blue-500 scale-125"
+                    : "border-slate-300 dark:border-slate-700"
                     }`}
             />
         ));
@@ -141,7 +143,7 @@ export default function UnlockPage() {
                     />
 
                     {/* Biometric Fallback */}
-                    {localStorage.getItem("faceIdEnabled") === "true" && (
+                    {faceIdEnabled && (
                         <div className="pt-4 border-t border-slate-50 dark:border-slate-800/50">
                             <button
                                 onClick={handleBiometric}
